@@ -83,6 +83,37 @@ final class WorkPatternHeuristicTests: XCTestCase {
         XCTAssertEqual(assessment.reasons, [.noRecentActivity])
     }
 
+    func testNightCarePresentationBringsForwardOneGentleDriftPromptButKeepsProtectSeparate() {
+        let policy = NightCarePresentationPolicy()
+        let routine = WorkPatternAssessment(
+            state: .routine,
+            totalActiveDuration: 20 * 60,
+            currentContinuousActiveDuration: 20 * 60,
+            appSwitchCount: 0,
+            reasons: [.belowDriftThreshold]
+        )
+        let drift = WorkPatternAssessment(
+            state: .drift,
+            totalActiveDuration: 50 * 60,
+            currentContinuousActiveDuration: 50 * 60,
+            appSwitchCount: 0,
+            reasons: [.sustainedContinuousActivity, .insideQuietHours, .nextDayEarlyStartConfigured]
+        )
+        let protect = WorkPatternAssessment(
+            state: .protect,
+            totalActiveDuration: 95 * 60,
+            currentContinuousActiveDuration: 95 * 60,
+            appSwitchCount: 0,
+            reasons: [.protectContinuousActivity, .insideQuietHours, .nextDayEarlyStartConfigured]
+        )
+        let careContext = WorkPatternRiskContext(isInsideQuietHours: true, hasNextDayEarlyStartConfigured: true)
+
+        XCTAssertTrue(policy.shouldPresentCare(previous: routine, next: drift, context: careContext, hasPresentedForCurrentDriftEpisode: false))
+        XCTAssertFalse(policy.shouldPresentCare(previous: drift, next: drift, context: careContext, hasPresentedForCurrentDriftEpisode: true))
+        XCTAssertTrue(policy.shouldPresentCare(previous: drift, next: protect, context: careContext, hasPresentedForCurrentDriftEpisode: true))
+        XCTAssertFalse(policy.shouldPresentCare(previous: routine, next: drift, context: WorkPatternRiskContext(isInsideQuietHours: true), hasPresentedForCurrentDriftEpisode: false))
+    }
+
     func testSubstantialBreakResetsContinuousActivity() {
         let heuristic = WorkPatternHeuristic()
         let assessment = heuristic.assess([

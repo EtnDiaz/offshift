@@ -29,6 +29,8 @@ final class CompanionStore: ObservableObject {
     private var countdownTimer: Timer?
     private var overrideExpiryTimer: Timer?
     private var hasStartedCountdownForProtectEpisode = false
+    private var hasPresentedNightCareDriftPrompt = false
+    private let nightCarePresentationPolicy = NightCarePresentationPolicy()
     let homeAssistantSettings = HomeAssistantSettings()
     let lockScreenSettings = LocalLockScreenSettings()
     let nightCareSettings = NightCareSettings()
@@ -61,6 +63,7 @@ final class CompanionStore: ObservableObject {
     var stateLabel: String { assessment.state.rawValue.capitalized }
     var reasons: [String] { assessment.reasons.map(\.rawValue) }
     var lockRuleEnabled: Bool { lockScreenSettings.isEnabled }
+    var isProtectState: Bool { assessment.state == .protect }
     var canStartCountdown: Bool { isOffshiftEnabled && assessment.state == .protect && lockRuleEnabled && !hasStartedCountdownForProtectEpisode }
     var canRunWindDown: Bool { isOffshiftEnabled && localControl.availability == .active && homeAssistantSettings.isConfigured && !isRunningWindDown }
     var isOffshiftEnabled: Bool { localControl.availability != .disabled }
@@ -134,6 +137,25 @@ final class CompanionStore: ObservableObject {
             context: WorkPatternRiskContext(
                 isInsideQuietHours: true,
                 snoozeCount: 2,
+                hasNextDayEarlyStartConfigured: true
+            ),
+            at: now
+        )
+        apply(assessment)
+    }
+
+    func simulateGentleNightCareNudge() {
+        let now = Date.now
+        let assessment = riskPolicy.assess(
+            [
+                ActiveAppInterval(
+                    startedAt: now.addingTimeInterval(-50 * 60),
+                    activeDuration: 50 * 60,
+                    appIdentifier: "active-session"
+                )
+            ],
+            context: WorkPatternRiskContext(
+                isInsideQuietHours: true,
                 hasNextDayEarlyStartConfigured: true
             ),
             at: now
@@ -267,7 +289,18 @@ final class CompanionStore: ObservableObject {
 
     private func apply(_ nextAssessment: WorkPatternAssessment) {
         guard localControl.permitsIntervention(at: .now) else { return }
-        let wasProtect = assessment.state == .protect
+        let previousAssessment = assessment
+        let wasProtect = previousAssessment.state == .protect
+        let careContext = WorkPatternRiskContext(
+            isInsideQuietHours: nightCareSettings.isInsideQuietHours(),
+            hasNextDayEarlyStartConfigured: nightCareSettings.hasEarlyStartTomorrow
+        )
+        let shouldPresentCare = nightCarePresentationPolicy.shouldPresentCare(
+            previous: previousAssessment,
+            next: nextAssessment,
+            context: careContext,
+            hasPresentedForCurrentDriftEpisode: hasPresentedNightCareDriftPrompt
+        )
         assessment = nextAssessment
         _ = controller.apply(assessment, at: .now)
         if assessment.state != .protect {
@@ -275,11 +308,23 @@ final class CompanionStore: ObservableObject {
             stopCountdownTimer()
             stopOverrideExpiryTimer()
             countdownText = "No countdown running"
-        } else if !wasProtect {
-            hasStartedCountdownForProtectEpisode = false
-            maybeStartAutomaticCountdown()
+        }
+        if assessment.state == .routine {
+            hasPresentedNightCareDriftPrompt = false
+        }
+        if assessment.state == .drift && shouldPresentCare {
+            hasPresentedNightCareDriftPrompt = true
+        }
+        if shouldPresentCare {
+            if assessment.state == .protect && !wasProtect {
+                hasStartedCountdownForProtectEpisode = false
+                maybeStartAutomaticCountdown()
+            }
             protectionPresentationToken &+= 1
             NSApp.activate(ignoringOtherApps: true)
+        } else if assessment.state == .protect && !wasProtect {
+            hasStartedCountdownForProtectEpisode = false
+            maybeStartAutomaticCountdown()
         }
         onCallMessage = nil
     }

@@ -511,6 +511,30 @@ public struct WorkPatternRiskPolicy: Sendable {
     }
 }
 
+/// Decides when the local companion may bring its care window forward without
+/// changing the intervention state. A quiet hour is never enough by itself:
+/// the gentle prompt still requires a Drift assessment plus the user's
+/// explicit early-start reminder. Lock-related controls remain Protect-only.
+public struct NightCarePresentationPolicy: Sendable {
+    public init() {}
+
+    public func shouldPresentCare(
+        previous: WorkPatternAssessment,
+        next: WorkPatternAssessment,
+        context: WorkPatternRiskContext,
+        hasPresentedForCurrentDriftEpisode: Bool
+    ) -> Bool {
+        if next.state == .protect {
+            return previous.state != .protect
+        }
+
+        return next.state == .drift
+            && context.isInsideQuietHours
+            && context.hasNextDayEarlyStartConfigured
+            && !hasPresentedForCurrentDriftEpisode
+    }
+}
+
 private struct ClippedInterval {
     let start: Date
     let end: Date

@@ -77,6 +77,7 @@ struct CompanionDashboardView: View {
                     Button("Routine") { store.simulateRoutine() }
                     Button("Drift") { store.simulateDrift() }
                     Button("Protect") { store.simulateProtect() }
+                    Button("Gentle night nudge") { store.simulateGentleNightCareNudge() }
                     Button("Late-session fixture") { store.simulateLateSessionRisk() }
                 }
             }
@@ -121,17 +122,23 @@ struct ProtectionWindowView: View {
                 VStack(alignment: .leading, spacing: 10) {
                 Button("Take 5") { store.takeFive() }
                     .buttonStyle(.borderedProminent)
-                Button("On call for 15 min") { store.grantOnCallOverride() }
                 Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
-                Button("Cancel countdown") { store.cancelPreLockCountdown() }
-                Button("Start 30-second countdown") { store.startPreLockCountdown() }
-                    .disabled(!store.canStartCountdown)
+                if store.isProtectState {
+                    Button("On call for 15 min") { store.grantOnCallOverride() }
+                    Button("Cancel countdown") { store.cancelPreLockCountdown() }
+                    Button("Start 30-second countdown") { store.startPreLockCountdown() }
+                        .disabled(!store.canStartCountdown)
+                } else {
+                    Text("This is an early gentle nudge. On-call and Lock Screen controls appear only if the local pattern later reaches Protect.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 }
 
                 Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
                     .font(.callout.weight(.medium))
 
-                Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override.")
+                Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override. This gentle nudge cannot start a countdown.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
