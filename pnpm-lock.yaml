@@ -217,6 +217,40 @@ importers:
         specifier: ^5.9.2
         version: 5.9.2
 
+  offshift_server_node:
+    dependencies:
+      '@modelcontextprotocol/ext-apps':
+        specifier: ^1.0.1
+        version: 1.0.1(@modelcontextprotocol/sdk@1.26.0(zod@3.25.76))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(zod@3.25.76)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.26.0
+        version: 1.26.0(zod@3.25.76)
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.3.0
+      tsx:
+        specifier: ^4.20.4
+        version: 4.20.4
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
+
   pizzaz_server_node:
     dependencies:
       '@modelcontextprotocol/sdk':

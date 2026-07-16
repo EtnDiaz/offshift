@@ -1,7 +1,7 @@
 {
-  "name": "ecosystem_ui",
-  "version": "5.0.16",
-  "description": "",
+  "name": "offshift-apps-sdk",
+  "version": "0.1.0",
+  "description": "Offshift ChatGPT App, forked locally from official Apps SDK examples.",
   "main": "host/main.ts",
   "scripts": {
     "build": "tsx ./build-all.mts",

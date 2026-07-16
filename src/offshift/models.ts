@@ -1,0 +1,88 @@
+export const OFFSHIFT_TOOLS = {
+  scheduleBreak: "schedule_break",
+  snoozeBreak: "snooze_break",
+} as const;
+
+export interface FocusSnapshot {
+  activeAppCategory: "coding";
+  focusMinutes: number;
+  thresholdMinutes: number;
+  suggestedBreakMinutes: number;
+  privacyNote: string;
+}
+
+export interface BreakPlan {
+  id: string;
+  status: "suggested" | "scheduled" | "snoozed" | "started";
+  durationMinutes: number;
+  sceneId: "stretch-lights" | "wind-down";
+  startsAt: string;
+  endsAt: string;
+  message: string;
+}
+
+export interface OffshiftWidgetData {
+  snapshot: FocusSnapshot;
+  plan: BreakPlan;
+  allowedSceneIds: readonly string[];
+}
+
+export type ActionName = "schedule" | "snooze";
+export type ActionStatus = "idle" | "working" | "success" | "error";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function isIsoString(value: unknown): value is string {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null {
+  if (!isRecord(value) || !isRecord(value.snapshot) || !isRecord(value.plan)) return null;
+
+  const snapshot = value.snapshot;
+  const plan = value.plan;
+  if (
+    snapshot.activeAppCategory !== "coding" ||
+    !isPositiveInt(snapshot.focusMinutes) ||
+    !isPositiveInt(snapshot.thresholdMinutes) ||
+    !isPositiveInt(snapshot.suggestedBreakMinutes) ||
+    typeof snapshot.privacyNote !== "string" ||
+    typeof plan.id !== "string" ||
+    !isPositiveInt(plan.durationMinutes) ||
+    (plan.sceneId !== "stretch-lights" && plan.sceneId !== "wind-down") ||
+    typeof plan.message !== "string" ||
+    !isIsoString(plan.startsAt) ||
+    !isIsoString(plan.endsAt) ||
+    (plan.status !== "suggested" && plan.status !== "scheduled" && plan.status !== "snoozed" && plan.status !== "started")
+  ) {
+    return null;
+  }
+
+  return {
+    snapshot: {
+      activeAppCategory: "coding",
+      focusMinutes: snapshot.focusMinutes,
+      thresholdMinutes: snapshot.thresholdMinutes,
+      suggestedBreakMinutes: snapshot.suggestedBreakMinutes,
+      privacyNote: snapshot.privacyNote,
+    },
+    plan: {
+      id: plan.id,
+      status: plan.status,
+      durationMinutes: plan.durationMinutes,
+      sceneId: plan.sceneId,
+      startsAt: plan.startsAt,
+      endsAt: plan.endsAt,
+      message: plan.message,
+    },
+    allowedSceneIds: Array.isArray(value.allowedSceneIds)
+      ? value.allowedSceneIds.filter((scene): scene is string => typeof scene === "string")
+      : [],
+  };
+}

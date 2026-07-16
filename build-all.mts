@@ -41,6 +41,7 @@ const targets: string[] = [
   "get-host-capabilities",
   "get-host-context",
   "get-host-version",
+  "offshift",
 ];
 const cliTargetIndex = process.argv.indexOf("--target");
 const cliTarget = cliTargetIndex !== -1 ? process.argv[cliTargetIndex + 1] : null;
