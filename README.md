@@ -9,7 +9,7 @@ The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Clou
 - `src/offshift/` — React widget. Standard controls use `@openai/apps-sdk-ui` only.
 - `offshift_worker/` — standalone Cloudflare Worker demo API, owned by its package tests.
 - `offshift_server_node/` — local MCP server that exposes the widget in ChatGPT Developer Mode.
-- `docs/offshift/` — product charter, architecture, tool contract, and safety model.
+- `docs/offshift/` — product charter, architecture, tool contract, safety model, [delivery roadmap](docs/offshift/roadmap.md), and [mascot brief](docs/offshift/mascot.md).
 
 ## MVP demo
 

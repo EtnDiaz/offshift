@@ -1,0 +1,71 @@
+# Offshift delivery roadmap
+
+## Product thesis
+
+Offshift should help a developer interrupt an unhealthy-looking work loop before it becomes another ignored notification. The first job is not to measure sleep or diagnose burnout. It is to make a late, uninterrupted, repeatedly-snoozed building session visible and give the person a respectful, reversible way to stop.
+
+The product calls this a **work-pattern risk**, never a health score. All detection is opt-in, explainable, and can be disabled immediately.
+
+## What is already built
+
+The first local slice is complete: an Apps SDK widget, local Node MCP server, bounded/idempotent schedule and snooze tools, and a tested Cloudflare Worker demo API. It uses fixture data; it does not yet observe a real session, present a monitor-level overlay, or control a home device.
+
+## Sequenced milestones
+
+| Milestone | Build | Test / decision gate | Outcome |
+| --- | --- | --- | --- |
+| 1. Real App loop | Put the MCP endpoint behind HTTPS, bind the Worker persistence boundary, and test the widget in ChatGPT Developer Mode. | Run direct, indirect, and negative golden prompts; confirm tool selection, arguments, repeat-call idempotency, and rendering. | A real ChatGPT App can plan, start, and snooze a break. |
+| 2. Shadow behaviour model | Build a local macOS collector that calculates a risk from coarse aggregates but shows no interruption yet. | Five developer participants use it for several work sessions; compare suggested events with a short self-report. | We learn whether the signals feel accurate enough to show. |
+| 3. Respectful intervention | Enable a local notification, then a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Measure acceptance, snooze, disable, and “unhelpful” events; test on-call override, instant disable, the pre-lock countdown, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
+| 4. One ambient action | Integrate exactly one user-owned, allowlisted Home Assistant scene, such as `wind-down`. | Test the scene in a sandbox with revoked credentials, retry, offline, and explicit-confirmation cases. | The demo has a real-world action without unsafe open-ended control. |
+| 5. Longer-horizon platforms | Evaluate iOS Screen Time separately, only after the core loop is proven and Apple entitlement feasibility is known. | Prototype under Apple’s required consent/entitlement path; abandon if it compromises the product timeline. | No dependency on Screen Time for the product to be useful. |
+
+## Behaviour model: first version
+
+The first heuristic runs locally with user-controlled thresholds. It may consider:
+
+- uninterrupted active-work minutes and lack of meaningful idle gaps;
+- local time inside a user-configured quiet-hours window;
+- total active time since the last accepted break;
+- a run of snoozes or dismissals; and
+- optionally, a boolean that a Codex session is active.
+
+It may not inspect prompts, code, diffs, terminal output, filenames, browser history, keystrokes, screenshots, camera, or microphone input. "Codex session active" is only a coarse opt-in state supplied by a local integration; it is not something the ChatGPT App can infer remotely.
+
+Use three explainable bands rather than an opaque score:
+
+1. **Routine** — dashboard shows the next break only.
+2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago.”
+3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. A user who has explicitly enabled the optional local Lock Screen rule also sees a cancellable countdown; the companion may then invoke macOS's own Lock Screen. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
+
+The user must see the contributing categories, change thresholds, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
+
+## Feature priority and proof of need
+
+| Feature | Priority | Why it earns its place | Proof before expansion |
+| --- | --- | --- | --- |
+| Explainable work-pattern heuristic | Must | It is the distinguishing value over a generic Pomodoro timer. | At least 3 of 5 pilot users say shown events were timely; fewer than one unhelpful interruption per two hours per user. |
+| Start / snooze / on-call override | Must | Preserves agency and produces feedback for tuning. | Every path works offline-safe locally and is auditable. |
+| macOS action-required overlay | Must after shadow pilot | ChatGPT cannot create a monitor-level interruption. | Participants choose a break more often than they immediately disable the feature. |
+| Local optional Lock Screen rule | Should after overlay validation | It is the strongest version of the promise, similar to Red Card's deliberate stop ritual. | Every pilot participant understands the exact rule, can cancel it, and reports no surprise locks. |
+| ChatGPT planner/dashboard | Must | Lets a developer inspect, explain, and modify the ritual conversationally. | Golden prompts pass in Developer Mode through a public HTTPS MCP endpoint. |
+| One Home Assistant scene | Should | Makes the ritual tangible; is useful only if the core nudge already helps. | One participant uses it repeatedly and it remains fully allowlisted. |
+| Codex active-state integration | Could | Can improve context, but must remain one boolean and optional. | It improves timeliness without requiring content collection. |
+| Gesture/camera trigger inspired by Red Card | Could | Good demo moment, but not required for the core loop. | Users choose it over a simple local control. |
+| Apple Screen Time | Later | Separate native entitlement/distribution risk and not required for macOS value. | Feasibility and user need are both confirmed. |
+| Arbitrary smart-home commands, auto-ending work, surveillance | Never | Violates safety, privacy, and user agency. | Not applicable. |
+
+## Testing ladder
+
+1. **Unit and contract tests** — threshold bounds, allowed scenes, idempotency, action transitions, and no-content telemetry schema.
+2. **Worker/API tests** — validation, authorization boundaries, offline/retry behaviour, and persistence migration tests.
+3. **MCP integration tests** — tool descriptors, UI resource MIME type/CSP, render data, and repeated tool calls.
+4. **ChatGPT Developer Mode tests** — use an HTTPS endpoint, execute direct/indirect/negative golden prompts, record selected tools and arguments, and check small layouts. ChatGPT Apps require an HTTPS MCP endpoint; rebuild, restart, and refresh the app metadata while iterating. [OpenAI Apps SDK deployment guide](https://developers.openai.com/apps-sdk/deploy) and [testing guide](https://developers.openai.com/apps-sdk/deploy/testing).
+5. **Companion manual tests** — permission denial, quiet-hours boundary, idle/resume, on-call override expiry, instant disable, reboot, no network, pre-lock cancel, one-lock-per-night, and restoration after the system Lock Screen.
+6. **Pilot evidence** — five opt-in developers, short interviews after several sessions, and only aggregate local event logs. Review false positives before enabling overlays.
+
+## Immediate next work
+
+The next implementation milestone is **Real App loop**: turn the current local MCP server/Worker boundary into a public HTTPS preview and run the golden-prompt suite in ChatGPT Developer Mode. We should not build the macOS collector or Home Assistant action until that loop is visibly working.
+
+The follow-on work is **shadow mode**, not an aggressive blocker: collect only the approved coarse signals, show the participant what would have been suggested, then decide whether a visible nudge is deserved. The auto-lock option comes only after that evidence, and always remains a local, named, cancellable rule.

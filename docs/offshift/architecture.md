@@ -12,7 +12,9 @@ Cloudflare Worker
 
 Future macOS companion
   -> aggregate active-app timing
+  -> local work-pattern heuristic and shadow-mode log
   -> action-required overlay
+  -> optional user-configured system Lock Screen rule
   -> signed command to an allowlisted Home Assistant scene
 ```
 
@@ -30,7 +32,7 @@ The ChatGPT App is the planner and dashboard. A local companion owns desktop not
 
 ### Local companion
 
-The companion sends only aggregate session facts such as `coding_active_seconds` and idle state. It receives a signed, short-lived, device-scoped instruction and can execute only local overlay changes or user-approved scene identifiers.
+The companion sends only aggregate session facts such as `coding_active_seconds`, idle state, configured quiet-hours state, and bounded break-action history. It may accept an opt-in boolean that a Codex session is active, but never prompt, code, terminal, repository, or screen content. The companion owns the optional Lock Screen rule entirely locally. It receives a signed, short-lived, device-scoped instruction only for local overlay changes or user-approved scene identifiers; server instructions cannot lock a device.
 
 ## Data minimization
 
