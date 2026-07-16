@@ -10,12 +10,12 @@ ChatGPT model
 Cloudflare Worker
   -> schedule/focus API and future D1 persistence
 
-Future macOS companion
+macOS companion
   -> aggregate active-app timing
   -> local work-pattern heuristic and shadow-mode log
   -> action-required overlay
   -> optional user-configured system Lock Screen rule
-  -> signed command to an allowlisted Home Assistant scene
+  -> direct local confirmation for one Home Assistant wind-down scene
 ```
 
 The ChatGPT App is the planner and dashboard. A local companion owns desktop notifications and any device-side action because a sandboxed ChatGPT iframe cannot force a monitor-level interaction. This is an architectural boundary, not a workaround.
@@ -32,7 +32,7 @@ The ChatGPT App is the planner and dashboard. A local companion owns desktop not
 
 ### Local companion
 
-`offshift_companion` now provides a SwiftPM menu-bar/window host around the local core: a dashboard, an intervention window, and a Settings scene. It samples local elapsed active/idle time and passes opaque aggregate `active-session` intervals into the heuristic; it never retains app titles or content. The companion sends only aggregate session facts such as `coding_active_seconds`, idle state, configured quiet-hours state, and bounded break-action history. It may accept an opt-in boolean that a Codex session is active, but never prompt, code, terminal, repository, or screen content. The companion owns the optional Lock Screen rule entirely locally. It receives a signed, short-lived, device-scoped instruction only for local overlay changes or user-approved scene identifiers; server instructions cannot lock a device.
+`offshift_companion` now provides a SwiftPM menu-bar/window host around the local core: a dashboard, an intervention window, and a Settings scene. It samples local elapsed active/idle time and passes opaque aggregate `active-session` intervals into the heuristic; it never retains app titles or content. The companion sends only aggregate session facts such as `coding_active_seconds`, idle state, configured quiet-hours state, and bounded break-action history. It may accept an opt-in boolean that a Codex session is active, but never prompt, code, terminal, repository, or screen content. The companion owns the optional Lock Screen rule entirely locally. It also maps the sole `wind-down` plan id to `scene.offshift_wind_down`; the user configures the Home Assistant base URL locally, the bearer token stays in Keychain, and a local confirmation dialog is required before `POST /api/services/scene/turn_on`. Server instructions cannot lock a device or supply an endpoint, token, service, or entity id.
 
 ## Data minimization
 

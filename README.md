@@ -2,7 +2,7 @@
 
 Offshift is a ChatGPT App for developers who need an intentional way to leave a work loop. It turns a chosen focus threshold into a small, reversible break ritual: show the next break, plan it, start it, or snooze it.
 
-The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Cloudflare Worker-compatible demo API, and a documented future boundary for a local macOS companion. It does not inspect code or screen content, call arbitrary smart-home URLs, or implement Screen Time controls.
+The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Cloudflare Worker-compatible demo API, and a local macOS companion. It does not inspect code or screen content, call arbitrary smart-home URLs, or implement Screen Time controls. The companion can run only one locally configured Home Assistant `wind-down` scene after direct local confirmation.
 
 ## Repository shape
 

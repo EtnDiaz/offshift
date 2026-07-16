@@ -16,7 +16,7 @@ export interface BreakPlan {
   id: string;
   status: "suggested" | "scheduled" | "snoozed" | "started" | "on-call";
   durationMinutes: number;
-  sceneId: "stretch-lights" | "wind-down";
+  sceneId: "wind-down";
   startsAt: string;
   endsAt: string;
   message: string;
@@ -70,7 +70,7 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
     (behaviour.lockScreenRule !== "not-configured" && behaviour.lockScreenRule !== "local-only") ||
     typeof plan.id !== "string" ||
     !isPositiveInt(plan.durationMinutes) ||
-    (plan.sceneId !== "stretch-lights" && plan.sceneId !== "wind-down") ||
+    plan.sceneId !== "wind-down" ||
     typeof plan.message !== "string" ||
     !isIsoString(plan.startsAt) ||
     !isIsoString(plan.endsAt) ||

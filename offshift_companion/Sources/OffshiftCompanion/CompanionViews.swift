@@ -60,6 +60,7 @@ struct CompanionDashboardView: View {
 
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
+    @State private var showingWindDownConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -86,6 +87,32 @@ struct ProtectionWindowView: View {
             Text("This build keeps the rule disabled. Enabling a real system Lock Screen action requires a separate, local consent flow and a reviewed adapter.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Home Assistant wind-down")
+                    .font(.headline)
+                Text("The only scene this build can run is the locally configured wind-down scene. ChatGPT and the Worker never receive the endpoint or token.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Run wind-down scene") {
+                    showingWindDownConfirmation = true
+                }
+                .disabled(!store.canRunWindDown)
+                .confirmationDialog(
+                    "Run your local wind-down scene?",
+                    isPresented: $showingWindDownConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Run wind-down scene") { store.runWindDownScene() }
+                } message: {
+                    Text("This sends one request to the Home Assistant endpoint configured only on this Mac. It does not lock your Mac or end your work.")
+                }
+                Text(store.windDownStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if let onCallMessage = store.onCallMessage {
                 Text(onCallMessage)
@@ -122,8 +149,33 @@ struct CompanionSettingsView: View {
             Section("Current state") {
                 Text(store.stateLabel)
             }
+            Section("Home Assistant wind-down") {
+                Text("Configure this only on your Mac. Offshift invokes exactly one mapped scene: scene.offshift_wind_down.")
+                    .foregroundStyle(.secondary)
+                TextField("Base URL", text: Binding(
+                    get: { store.homeAssistantSettings.endpointText },
+                    set: { store.homeAssistantSettings.endpointText = $0 }
+                ))
+                    .textContentType(.URL)
+                SecureField("Long-lived access token", text: Binding(
+                    get: { store.homeAssistantSettings.tokenDraft },
+                    set: { store.homeAssistantSettings.tokenDraft = $0 }
+                ))
+                HStack {
+                    Button("Save local configuration") { store.homeAssistantSettings.save() }
+                    Button("Remove configuration", role: .destructive) { store.homeAssistantSettings.clear() }
+                }
+                if let message = store.homeAssistantSettings.settingsMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("The token stays in this Mac's Keychain and is never included in ChatGPT, MCP, Worker, or audit payloads.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(24)
-        .frame(width: 440)
+        .frame(width: 520)
     }
 }

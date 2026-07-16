@@ -3,13 +3,13 @@
 ## Protected boundaries
 
 - Home automation credentials remain outside ChatGPT, the widget, and model-visible `structuredContent`.
-- A scene is selected by opaque allowlisted id, not by an arbitrary URL or freeform command.
+- A scene is selected by one opaque allowlisted id (`wind-down`), not by an arbitrary URL or freeform command.
 - Widget state is presentation state, never authorization state.
 - The server validates duration limits, scene ids, device identity, and idempotency before changing a schedule.
 
 ## Consent model
 
-Scheduling and snoozing require an explicit current-turn action. The future companion asks for direct local confirmation before an external scene is run unless the user enabled a specific automation rule locally.
+Scheduling and snoozing require an explicit current-turn action. The companion asks for direct local confirmation before the only external scene is run. It does not currently expose an automatic scene rule.
 
 Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterrupted-work window, whether a Codex-session-active signal is allowed, whether an early-start reminder may be used, and an immediate disable switch. Incident/on-call mode must silence all nudges for a bounded duration and leave an audit entry; it must never be a hidden bypass.
 
@@ -34,4 +34,4 @@ The macOS companion may invoke the system Lock Screen only after the user enable
 
 ## Logging
 
-Keep audit records to action type, opaque schedule id, timestamp, result, non-sensitive device alias, and coarse signal categories that caused a shown nudge. Do not log source code, screen content, raw usage history, camera frames, biometric outputs, OAuth tokens, or smart-home credentials.
+Keep audit records to action type, opaque schedule id, timestamp, result, non-sensitive device alias, and coarse signal categories that caused a shown nudge. Home Assistant's endpoint is local preference data and its token stays in Keychain. Do not log source code, screen content, raw usage history, camera frames, biometric outputs, OAuth tokens, Home Assistant tokens, or smart-home credentials.

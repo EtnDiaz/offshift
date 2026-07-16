@@ -1,4 +1,6 @@
-export const ALLOWED_SCENE_IDS = ["stretch-lights", "wind-down"] as const;
+// The model can plan this opaque id, but only the local companion can map it to
+// a Home Assistant entity and execute it after direct local confirmation.
+export const ALLOWED_SCENE_IDS = ["wind-down"] as const;
 
 export type AllowedSceneId = (typeof ALLOWED_SCENE_IDS)[number];
 export type BreakStatus = "suggested" | "scheduled" | "snoozed" | "started" | "on-call";
@@ -142,7 +144,7 @@ export function snoozeBreak(
   const previous = state.idempotencyResults.get(input.idempotencyKey);
   if (previous) return previous;
 
-  const current = state.currentPlan ?? previewBreakPlan(5, "stretch-lights", now);
+  const current = state.currentPlan ?? previewBreakPlan(5, "wind-down", now);
   const startsAt = new Date(now.getTime() + input.minutes * 60_000);
   const plan = buildPlan(
     current.id,
@@ -164,7 +166,7 @@ export function setOnCallOverride(
   const previous = state.idempotencyResults.get(input.idempotencyKey);
   if (previous) return previous;
 
-  const current = state.currentPlan ?? previewBreakPlan(5, "stretch-lights", now);
+  const current = state.currentPlan ?? previewBreakPlan(5, "wind-down", now);
   const until = new Date(now.getTime() + input.minutes * 60_000);
   const plan = buildPlan(current.id, "on-call", current.durationMinutes, current.sceneId, until);
   state.currentPlan = plan;

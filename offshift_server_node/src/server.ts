@@ -27,7 +27,7 @@ import {
 const VERSION = "0.1.0";
 // Bump this URI whenever the widget markup, styles, or bridge behaviour changes.
 // ChatGPT caches resources by URI; the package build hash alone is not sufficient.
-const TEMPLATE_URI = "ui://widget/offshift-v2.html";
+const TEMPLATE_URI = "ui://widget/offshift-v3.html";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..", "..");
 const assetsDir = path.join(rootDir, "assets");
@@ -59,10 +59,10 @@ function readWidgetHtml(): string {
 
 const planInput = {
   durationMinutes: z.number().int().min(1).max(30).default(5),
-  sceneId: z.enum(ALLOWED_SCENE_IDS).default("stretch-lights"),
+  sceneId: z.enum(ALLOWED_SCENE_IDS).default("wind-down"),
 };
 
-function toolResult(plan = demoState.currentPlan ?? previewBreakPlan(5, "stretch-lights")) {
+function toolResult(plan = demoState.currentPlan ?? previewBreakPlan(5, "wind-down")) {
   return {
     structuredContent: {
       snapshot: focusSnapshot(),

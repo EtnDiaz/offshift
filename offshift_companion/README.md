@@ -14,6 +14,8 @@ This SwiftPM package contains the local decision core for the future macOS compa
 
 The included macOS host is a menu-bar and window-based fixture over the core. It samples aggregate local active/idle time once per minute using only elapsed durations, then feeds opaque `active-session` intervals into the heuristic. It makes routine/drift/protect state, the cancellable intervention window, and bounded on-call behaviour visible. Its Lock Screen control is deliberately disabled and no real adapter ships in this build.
 
+The companion also supports exactly one locally configured Home Assistant scene: `wind-down`, mapped to `scene.offshift_wind_down`. The base URL is stored locally, the long-lived token is stored in the macOS Keychain, and every call requires the local confirmation dialog. A rejected token, missing scene, or unavailable host produces an explanatory local result and is never retried automatically.
+
 Camera, Screen Time, and facial-fatigue detection are not implemented. A future camera experiment could only use a separately enabled local presence signal; it cannot retain/transmit frames or infer fatigue, identity, emotion, health, or attention.
 
 ## Development

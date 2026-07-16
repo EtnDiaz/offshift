@@ -105,6 +105,61 @@ final class WorkPatternHeuristicTests: XCTestCase {
     }
 }
 
+final class HomeAssistantWindDownTests: XCTestCase {
+    func testOnlyFixedWindDownSceneCanBeEncodedIntoARequest() throws {
+        let configuration = try HomeAssistantWindDownConfiguration(
+            baseURL: URL(string: "http://homeassistant.local:8123")!
+        )
+        let request = try configuration.makeActivationRequest(token: "local-token")
+
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.absoluteString, "http://homeassistant.local:8123/api/services/scene/turn_on")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer local-token")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(
+            try JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: String],
+            ["entity_id": "scene.offshift_wind_down"]
+        )
+    }
+
+    func testHomeAssistantConfigurationRejectsUnsafeOrIncompleteValues() {
+        XCTAssertThrowsError(try HomeAssistantWindDownConfiguration(baseURL: URL(string: "file:///tmp/scene")!))
+        XCTAssertThrowsError(try HomeAssistantWindDownConfiguration(baseURL: URL(string: "https://user:password@homeassistant.local")!))
+        XCTAssertThrowsError(try HomeAssistantWindDownConfiguration(baseURL: URL(string: "https://homeassistant.local?target=other")!))
+
+        let configuration = try! HomeAssistantWindDownConfiguration(baseURL: URL(string: "https://homeassistant.local")!)
+        XCTAssertThrowsError(try configuration.makeActivationRequest(token: "  "))
+    }
+
+    func testHomeAssistantOutcomesCoverSuccessRevokedCredentialsAndOfflineWithoutAutomaticRetry() async throws {
+        XCTAssertEqual(WindDownSceneResponseMapper.map(statusCode: 200), .activated)
+        XCTAssertEqual(WindDownSceneResponseMapper.map(statusCode: 401), .unauthorized)
+        XCTAssertEqual(WindDownSceneResponseMapper.map(statusCode: 404), .sceneNotFound)
+        XCTAssertEqual(WindDownSceneResponseMapper.map(statusCode: 503), .rejected(statusCode: 503))
+        let calls = CallRecorder()
+        let client = HomeAssistantWindDownClient { request in
+            await calls.record(request)
+            return .unavailable
+        }
+        let configuration = try HomeAssistantWindDownConfiguration(baseURL: URL(string: "http://homeassistant.local:8123")!)
+
+        let outcome = await client.activate(configuration: configuration, token: "local-token")
+        let callCount = await calls.count
+
+        XCTAssertEqual(outcome, .unavailable)
+        XCTAssertEqual(callCount, 1)
+        XCTAssertTrue(outcome.userMessage.contains("Nothing was retried automatically"))
+    }
+}
+
+private actor CallRecorder {
+    private(set) var count = 0
+
+    func record(_ request: URLRequest) {
+        count += 1
+    }
+}
+
 final class InterventionControllerTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 

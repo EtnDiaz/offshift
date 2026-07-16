@@ -14,15 +14,21 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var lockRuleEnabled = false
     @Published private(set) var onCallMessage: String?
     @Published private(set) var samplingStatus = "Local aggregate sampling is starting"
+    @Published private(set) var windDownStatus = "The wind-down scene is not configured on this Mac."
+    @Published private(set) var isRunningWindDown = false
 
     private let shadowLog = InMemoryShadowModeLog()
     private let lockAdapter = NeverLockingTestAdapter()
     private var controller: InterventionController
     private let riskPolicy = WorkPatternRiskPolicy()
     private let sampler = MacActivitySampler()
+    let homeAssistantSettings = HomeAssistantSettings()
 
     init() {
         controller = InterventionController(lockAdapter: lockAdapter, shadowLog: shadowLog)
+        homeAssistantSettings.onSettingsChanged = { [weak self] in
+            self?.objectWillChange.send()
+        }
         sampler.onIntervalsChanged = { [weak self] intervals in
             self?.applyLiveIntervals(intervals)
         }
@@ -32,6 +38,7 @@ final class CompanionStore: ObservableObject {
     var stateLabel: String { assessment.state.rawValue.capitalized }
     var reasons: [String] { assessment.reasons.map(\.rawValue) }
     var canStartCountdown: Bool { assessment.state == .protect && !lockRuleEnabled }
+    var canRunWindDown: Bool { homeAssistantSettings.isConfigured && !isRunningWindDown }
 
     func simulateRoutine() {
         apply(state: .routine, reasons: [.belowDriftThreshold])
@@ -90,6 +97,24 @@ final class CompanionStore: ObservableObject {
         lockRuleEnabled = enabled
         if enabled {
             onCallMessage = "A real lock adapter is not installed in this build; this switch does not lock your Mac."
+        }
+    }
+
+    func runWindDownScene() {
+        guard let credentials = homeAssistantSettings.credentials() else {
+            windDownStatus = "Configure the local Home Assistant endpoint and Keychain token in Settings first."
+            return
+        }
+        isRunningWindDown = true
+        windDownStatus = "Sending the locally confirmed wind-down scene…"
+        Task { [weak self] in
+            let outcome = await HomeAssistantWindDownClient.live.activate(
+                configuration: credentials.configuration,
+                token: credentials.token
+            )
+            guard let self else { return }
+            isRunningWindDown = false
+            windDownStatus = outcome.userMessage
         }
     }
 

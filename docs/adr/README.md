@@ -10,3 +10,4 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0004](0004-explainable-policy-before-ml.md) | Use deterministic explainable policy before any learned model. | Accepted |
 | [0005](0005-offshift-companion-mascot.md) | Use an original Offshift companion mascot, not an official Codex character. | Accepted |
 | [0006](0006-risk-factors-without-biometric-inference.md) | Combine opt-in risk factors without biometric fatigue inference. | Accepted |
+| [0007](0007-local-home-assistant-wind-down.md) | Execute exactly one Home Assistant scene only after local confirmation. | Accepted |

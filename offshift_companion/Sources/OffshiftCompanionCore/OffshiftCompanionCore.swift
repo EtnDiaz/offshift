@@ -1,5 +1,128 @@
 import Foundation
 
+/// The only smart-home capability in the MVP. This identifier never comes from a
+/// ChatGPT tool, a Worker response, or freeform model text.
+public enum WindDownScene {
+    public static let id = "wind-down"
+    public static let homeAssistantEntityId = "scene.offshift_wind_down"
+    public static let servicePath = "api/services/scene/turn_on"
+}
+
+public enum HomeAssistantConfigurationError: Error, Equatable, Sendable {
+    case invalidBaseURL
+    case missingToken
+}
+
+/// A locally configured Home Assistant base URL. It is never included in MCP data.
+public struct HomeAssistantWindDownConfiguration: Equatable, Sendable {
+    public let baseURL: URL
+
+    public init(baseURL: URL) throws {
+        guard let scheme = baseURL.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              baseURL.host != nil,
+              baseURL.user == nil,
+              baseURL.password == nil,
+              baseURL.query == nil,
+              baseURL.fragment == nil else {
+            throw HomeAssistantConfigurationError.invalidBaseURL
+        }
+        self.baseURL = baseURL
+    }
+
+    public func makeActivationRequest(token: String) throws -> URLRequest {
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedToken.isEmpty else { throw HomeAssistantConfigurationError.missingToken }
+
+        let endpoint = baseURL
+            .appendingPathComponent(WindDownScene.servicePath)
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(trimmedToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["entity_id": WindDownScene.homeAssistantEntityId])
+        return request
+    }
+}
+
+public enum WindDownSceneOutcome: Equatable, Sendable {
+    case activated
+    case unauthorized
+    case sceneNotFound
+    case rejected(statusCode: Int)
+    case unavailable
+
+    public var userMessage: String {
+        switch self {
+        case .activated:
+            return "The local wind-down scene ran."
+        case .unauthorized:
+            return "Home Assistant rejected the stored token. Update it locally in Settings."
+        case .sceneNotFound:
+            return "Home Assistant could not find scene.offshift_wind_down. Create that scene locally, then retry."
+        case let .rejected(statusCode):
+            return "Home Assistant rejected the wind-down request (HTTP \(statusCode)). Nothing else was changed."
+        case .unavailable:
+            return "Home Assistant is unavailable. Nothing was retried automatically; you can retry after checking your local connection."
+        }
+    }
+}
+
+public enum WindDownSceneResponseMapper {
+    public static func map(statusCode: Int) -> WindDownSceneOutcome {
+        switch statusCode {
+        case 200, 201:
+            return .activated
+        case 401, 403:
+            return .unauthorized
+        case 404:
+            return .sceneNotFound
+        default:
+            return .rejected(statusCode: statusCode)
+        }
+    }
+}
+
+public enum WindDownSceneTransportResult: Equatable, Sendable {
+    case response(statusCode: Int)
+    case unavailable
+}
+
+/// The executor is injectable so tests can prove that failed calls are not retried.
+/// Only the live companion supplies the URLSession transport.
+public struct HomeAssistantWindDownClient: Sendable {
+    private let execute: @Sendable (URLRequest) async -> WindDownSceneTransportResult
+
+    public init(execute: @escaping @Sendable (URLRequest) async -> WindDownSceneTransportResult) {
+        self.execute = execute
+    }
+
+    public func activate(
+        configuration: HomeAssistantWindDownConfiguration,
+        token: String
+    ) async -> WindDownSceneOutcome {
+        guard let request = try? configuration.makeActivationRequest(token: token) else {
+            return .unavailable
+        }
+        switch await execute(request) {
+        case let .response(statusCode):
+            return WindDownSceneResponseMapper.map(statusCode: statusCode)
+        case .unavailable:
+            return .unavailable
+        }
+    }
+
+    public static let live = HomeAssistantWindDownClient { request in
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return .unavailable }
+            return .response(statusCode: httpResponse.statusCode)
+        } catch {
+            return .unavailable
+        }
+    }
+}
+
 /// Aggregate active-application timing. `appIdentifier` should be an opaque stable identifier;
 /// it is never interpreted as source-code or screen-content data.
 public struct ActiveAppInterval: Equatable, Sendable {

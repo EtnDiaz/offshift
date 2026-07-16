@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDemoState, focusSnapshot, scheduleBreak, setOnCallOverride, snoozeBreak, workPatternSnapshot } from "./domain.js";
+import { ALLOWED_SCENE_IDS, createDemoState, focusSnapshot, isAllowedSceneId, scheduleBreak, setOnCallOverride, snoozeBreak, workPatternSnapshot } from "./domain.js";
+
+test("the MCP contract exposes exactly one opaque local scene", () => {
+  assert.deepEqual(ALLOWED_SCENE_IDS, ["wind-down"]);
+  assert.equal(isAllowedSceneId("wind-down"), true);
+  assert.equal(isAllowedSceneId("stretch-lights"), false);
+  assert.equal(isAllowedSceneId("https://example.test/webhook"), false);
+});
 
 test("scheduleBreak returns the same result for an idempotency key", () => {
   const state = createDemoState();
   const now = new Date("2026-07-16T12:00:00.000Z");
   const input = {
     durationMinutes: 5,
-    sceneId: "stretch-lights" as const,
+    sceneId: "wind-down" as const,
     idempotencyKey: "schedule-1",
   };
 
