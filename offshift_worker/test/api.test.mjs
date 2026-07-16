@@ -165,8 +165,8 @@ test("schedule and snooze reject values beyond their safety bounds", async () =>
 
 test("MCP exposes the decoupled tools with accurate safety annotations", async () => {
   const worker = app();
-  const initialized = await mcp(worker, 1, "initialize", { protocolVersion: "2026-01-26", capabilities: {}, clientInfo: { name: "test", version: "1" } });
-  assert.equal(initialized.protocolVersion, "2026-01-26");
+  const initialized = await mcp(worker, 1, "initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "test", version: "1" } });
+  assert.equal(initialized.protocolVersion, "2025-03-26");
   assert.match(initialized.instructions, /never infer health/);
 
   const { tools } = await mcp(worker, 2, "tools/list");

@@ -340,8 +340,15 @@ function handleMcpMethod(
   dependencies: WorkerDependencies,
 ): unknown {
   if (method === "initialize") {
+    // MCP clients validate the server-selected version during the initial
+    // handshake. This stateless server supports the client's offered version;
+    // returning a hard-coded newer version makes otherwise compatible clients
+    // reject the connection before they can discover tools.
+    const protocolVersion = typeof params.protocolVersion === "string" && params.protocolVersion.length > 0
+      ? params.protocolVersion
+      : MCP_PROTOCOL_VERSION;
     return {
-      protocolVersion: MCP_PROTOCOL_VERSION,
+      protocolVersion,
       capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
       serverInfo: { name: "offshift-worker", version: MCP_SERVER_VERSION },
       instructions: "Offshift provides safe focus and break planning. Use only aggregate local timing; never infer health, read content, or request remote device actions. The model may explain or preview a plan; only an explicit dashboard click can schedule, snooze, set an on-call override, or resume reminders. The Worker cannot lock a device or run a smart-home scene.",
