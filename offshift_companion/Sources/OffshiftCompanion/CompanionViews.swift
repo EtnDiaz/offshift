@@ -96,87 +96,74 @@ struct CompanionDashboardView: View {
 
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
-    @State private var showingWindDownConfirmation = false
     @AccessibilityFocusState private var isCareMessageFocused: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: store.isProtectState ? "moon.zzz.fill" : "moon.stars.fill")
+                    .font(.system(size: 54, weight: .light))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .accessibilityHidden(true)
                 Text(store.careHeadline)
-                    .font(.title2.weight(.semibold))
+                    .font(.system(size: 36, weight: .semibold, design: .rounded))
+                    .multilineTextAlignment(.center)
                     .accessibilityFocused($isCareMessageFocused)
                 Text(store.careMessage)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundStyle(.secondary)
-                Text("This is your gentle ejection from work for tonight — not a punishment. Nothing here ends your work or reaches your code.")
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(store.careReason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(store.countdownText)
-                    .font(.callout)
-                    .accessibilityLabel("Lock Screen status: \(store.countdownText)")
-
-                VStack(alignment: .leading, spacing: 10) {
-                Button("Take 5") { store.takeFive() }
-                    .buttonStyle(.borderedProminent)
-                Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
-                if store.isProtectState {
-                    Button("On call for 15 min") { store.grantOnCallOverride() }
-                    Button("Cancel countdown") { store.cancelPreLockCountdown() }
-                    Button("Start 30-second countdown") { store.startPreLockCountdown() }
-                        .disabled(!store.canStartCountdown)
-                } else {
-                    Text("This is an early gentle nudge. On-call and Lock Screen controls appear only if the local pattern later reaches Protect.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                }
-
-                Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
+                    .font(.title3)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .frame(maxWidth: 620)
+                Text("Nothing here closes Codex, your terminal, or your work.")
                     .font(.callout.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.9))
 
-                Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override. This gentle nudge cannot start a countdown.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    Text(store.careReason)
+                    Text(store.countdownText)
+                        .accessibilityLabel("Lock Screen status: \(store.countdownText)")
+                }
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(maxWidth: 580)
 
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Home Assistant wind-down")
-                        .font(.headline)
-                    Text("The only scene this build can run is the locally configured wind-down scene. ChatGPT and the Worker never receive the endpoint or token.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Run wind-down scene") {
-                        showingWindDownConfirmation = true
+                VStack(spacing: 12) {
+                    Button("Take 5") { store.takeFive() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                    Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
+                        .buttonStyle(.bordered)
+                    if store.isProtectState {
+                        HStack {
+                            Button("On call for 15 min") { store.grantOnCallOverride() }
+                            Button("Cancel countdown") { store.cancelPreLockCountdown() }
+                            if store.canStartCountdown {
+                                Button("Start 10-second countdown") { store.startPreLockCountdown() }
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Text("This is a gentle night nudge. It cannot start a Lock Screen countdown.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.55))
                     }
-                    .disabled(!store.canRunWindDown)
-                    .confirmationDialog(
-                        "Run your local wind-down scene?",
-                        isPresented: $showingWindDownConfirmation,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Run wind-down scene") { store.runWindDownScene() }
-                    } message: {
-                        Text("This sends one request to the Home Assistant endpoint configured only on this Mac. It does not lock your Mac or end your work.")
-                    }
-                    Text(store.windDownStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 if let onCallMessage = store.onCallMessage {
                     Text(onCallMessage)
                         .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
+                Spacer()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
-            .padding(.top, 28)
+            .foregroundStyle(.white)
+            .padding(48)
         }
+        .background(InterventionWindowConfigurator())
         .onAppear { isCareMessageFocused = true }
     }
 }
@@ -220,7 +207,7 @@ struct CompanionSettingsView: View {
             }
             Section("Protection") {
                 Text("A local rule can use the macOS Lock Screen shortcut only after explicit confirmation.")
-                Text("Rule: when the local policy remains Protect, start one visible 30-second countdown. Cancel and a bounded 15-minute on-call override remain available.")
+                Text("Rule: when the local policy remains Protect, show a black full-screen intervention, then start one visible 10-second countdown. Cancel and a bounded 15-minute on-call override remain available.")
                     .foregroundStyle(.secondary)
                 if store.lockRuleEnabled {
                     Text("Enabled only on this Mac.")
@@ -305,7 +292,7 @@ struct CompanionSettingsView: View {
                 store.lockScreenSettings.enableAfterLocalConfirmation()
             }
         } message: {
-            Text("Only when the local companion remains in Protect, Offshift will show one 30-second visible countdown and then post macOS's Lock Screen shortcut. You can cancel the countdown or use one 15-minute on-call override. ChatGPT and the Worker cannot trigger this rule.")
+            Text("Only when the local companion remains in Protect, Offshift will show a black full-screen intervention, then one visible 10-second countdown and post macOS's Lock Screen shortcut. You can cancel the countdown or use one 15-minute on-call override. ChatGPT and the Worker cannot trigger this rule.")
         }
         .padding(24)
         .frame(width: 520)

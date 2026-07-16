@@ -25,12 +25,12 @@ Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterr
 
 ## Optional Lock Screen rule
 
-The macOS companion may invoke the system Lock Screen only after the user enables one named local rule. The MVP rule is fixed and locally confirmed: while Protect remains active, show a 30-second countdown, then make one system Lock Screen attempt. It is disabled by default. The rule is evaluated locally; ChatGPT, the model, and the Worker cannot create, relax, or invoke it.
+The macOS companion may invoke the system Lock Screen only after the user enables one named local rule. The MVP rule is fixed and locally confirmed: while Protect remains active, show a black intervention surface and a 10-second countdown, then make one system Lock Screen attempt. It is disabled by default. The rule is evaluated locally; ChatGPT, the model, and the Worker cannot create, relax, or invoke it.
 
 - Show a visible local countdown with a one-click cancel and a bounded on-call override before every lock.
 - Limit automatic locking to one attempt per protect episode unless the user has actively re-enabled it after the policy leaves Protect.
 - The adapter may only post macOS's standard Lock Screen shortcut after macOS Accessibility permission is available. Permission denial must fail closed, show an explanation, and never emulate a lock screen.
-- Never implement a fake full-screen lock, conceal an exit route, prevent the user from unlocking with macOS, or request passwords.
+- Never present the intervention surface as macOS's system lock, conceal its local `Take 5` / pause / cancel exits, prevent the user from unlocking with macOS, or request passwords.
 - Stop and require local re-consent after an OS upgrade, permission change, or repeatedly cancelled countdowns.
 
 ## Logging

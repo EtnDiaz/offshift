@@ -14,7 +14,7 @@ It must be clearly branded as **Offshift's companion**, not presented as an offi
 | Drift | Looks up; the desk light gets warmer/dimmer. | “You’ve been building for 90 minutes. Want a five-minute reset?” |
 | Protect | Puts a little terminal to sleep and points at the three clear choices. | “Quiet hours started. Take 5, snooze once, or declare on-call.” |
 | Break active | Stretches or watches a timer. | “I’ll keep the task safe. Come back at 23:20.” |
-| Pre-lock countdown | Holds a key icon beside the system-lock explanation. | “Your local wind-down rule will lock this Mac in 30 seconds. Cancel?” |
+| Pre-lock countdown | Holds a key icon beside the system-lock explanation. | “Your local wind-down rule will lock this Mac in 10 seconds. Cancel?” |
 
 ## Interaction rules
 

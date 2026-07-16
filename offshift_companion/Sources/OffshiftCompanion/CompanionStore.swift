@@ -35,7 +35,9 @@ final class CompanionStore: ObservableObject {
     let lockScreenSettings = LocalLockScreenSettings()
     let nightCareSettings = NightCareSettings()
 
-    private let lockCountdownDuration: TimeInterval = 30
+    /// A short, always-visible local interval: the intervention wall appears first,
+    /// then a separately enabled local rule may request the real system Lock Screen.
+    private let lockCountdownDuration: TimeInterval = 10
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -91,15 +93,18 @@ final class CompanionStore: ObservableObject {
     }
 
     var careHeadline: String {
-        nightCareSettings.isInsideQuietHours()
-            ? "The shift can end here"
-            : "You have been working for a while"
+        if isProtectState {
+            return nightCareSettings.isInsideQuietHours()
+                ? "It can end here for tonight"
+                : "Step away from the loop"
+        }
+        return "Maybe it is time to pause"
     }
 
     var careMessage: String {
         let now = Date.now.formatted(date: .omitted, time: .shortened)
         if nightCareSettings.isInsideQuietHours() {
-            return "It’s \(now). Your work stays open, and Offshift will not close Codex or your terminal. The next tokens can wait; caring for yourself does not erase the progress you made tonight."
+            return "It’s \(now). Your work stays open, and Offshift will not close Codex or your terminal. Your tokens will still be here when you return; caring for yourself does not erase the progress you made tonight."
         }
         return "You have reached your local protection threshold. Your work stays open; choose a short reset, a bounded on-call exception, or pause tonight."
     }
@@ -180,7 +185,7 @@ final class CompanionStore: ObservableObject {
         guard controller.startPreLockCountdown(at: .now, duration: lockCountdownDuration) else { return }
         hasStartedCountdownForProtectEpisode = true
         startCountdownTimer()
-        countdownText = "30-second local countdown started. Cancel or use the bounded on-call override before it ends."
+        countdownText = "10-second local countdown started. Cancel or use the bounded on-call override before it ends."
     }
 
     func cancelPreLockCountdown() {
