@@ -272,6 +272,32 @@ public struct WorkPatternHeuristicConfiguration: Equatable, Sendable {
     }
 }
 
+/// A user-owned local schedule. It is a time-of-day explanation only; callers
+/// must still require sustained local activity before escalating an action.
+public struct QuietHoursSchedule: Equatable, Sendable {
+    public let startHour: Int
+    public let endHour: Int
+
+    public init(startHour: Int = 23, endHour: Int = 7) {
+        precondition((0..<24).contains(startHour))
+        precondition((0..<24).contains(endHour))
+        precondition(startHour != endHour)
+        self.startHour = startHour
+        self.endHour = endHour
+    }
+
+    public func contains(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let hour = calendar.component(.hour, from: date)
+        return contains(hour: hour)
+    }
+
+    public func contains(hour: Int) -> Bool {
+        guard (0..<24).contains(hour) else { return false }
+        if startHour < endHour { return hour >= startHour && hour < endHour }
+        return hour >= startHour || hour < endHour
+    }
+}
+
 /// A transparent rule set over aggregate timing. It does not infer health, fatigue, or intent.
 public struct WorkPatternHeuristic: Sendable {
     public let configuration: WorkPatternHeuristicConfiguration

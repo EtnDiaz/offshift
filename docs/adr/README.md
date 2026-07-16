@@ -14,3 +14,4 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0008](0008-local-lock-screen-execution.md) | Ship the Lock Screen adapter as a disabled local rule. | Accepted |
 | [0009](0009-widget-is-the-mutation-consent-surface.md) | Keep ChatGPT mutations behind an explicit widget action and make overrides reversible. | Accepted |
 | [0010](0010-local-pause-and-disable-gate.md) | Keep pause/off authority inside the local companion. | Accepted |
+| [0011](0011-local-night-care-overlay.md) | Bring a local protection window forward after opted-in quiet-hours Protect. | Accepted |

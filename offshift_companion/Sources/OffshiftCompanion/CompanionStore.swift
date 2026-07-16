@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import OffshiftCompanionCore
 
@@ -16,6 +17,7 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var windDownStatus = "The wind-down scene is not configured on this Mac."
     @Published private(set) var isRunningWindDown = false
     @Published private(set) var localControl = LocalInterventionGate()
+    @Published private(set) var protectionPresentationToken = 0
 
     private let shadowLog = InMemoryShadowModeLog()
     private let disabledLockAdapter = NeverLockingTestAdapter()
@@ -28,6 +30,7 @@ final class CompanionStore: ObservableObject {
     private var hasStartedCountdownForProtectEpisode = false
     let homeAssistantSettings = HomeAssistantSettings()
     let lockScreenSettings = LocalLockScreenSettings()
+    let nightCareSettings = NightCareSettings()
 
     private let lockCountdownDuration: TimeInterval = 30
 
@@ -40,6 +43,9 @@ final class CompanionStore: ObservableObject {
         }
         lockScreenSettings.onSettingsChanged = { [weak self] in
             self?.reconfigureLocalLockRule()
+        }
+        nightCareSettings.onSettingsChanged = { [weak self] in
+            self?.objectWillChange.send()
         }
         sampler.onIntervalsChanged = { [weak self] intervals in
             self?.applyLiveIntervals(intervals)
@@ -72,6 +78,27 @@ final class CompanionStore: ObservableObject {
         }
     }
 
+    var careHeadline: String {
+        nightCareSettings.isInsideQuietHours()
+            ? "The shift can end here"
+            : "You have been working for a while"
+    }
+
+    var careMessage: String {
+        let now = Date.now.formatted(date: .omitted, time: .shortened)
+        if nightCareSettings.isInsideQuietHours() {
+            return "It’s \(now). Your work stays open, and Offshift will not close Codex or your terminal. The next tokens can wait; caring for yourself does not erase the progress you made tonight."
+        }
+        return "You have reached your local protection threshold. Your work stays open; choose a short reset, a bounded on-call exception, or pause tonight."
+    }
+
+    var careReason: String {
+        if nightCareSettings.isInsideQuietHours() {
+            return "Why now: sustained local activity during your \(NightCareSettings.hourLabel(nightCareSettings.startHour))–\(NightCareSettings.hourLabel(nightCareSettings.endHour)) quiet hours."
+        }
+        return "Why now: sustained local aggregate activity reached your protection threshold."
+    }
+
     func simulateRoutine() {
         apply(state: .routine, reasons: [.belowDriftThreshold])
     }
@@ -102,6 +129,11 @@ final class CompanionStore: ObservableObject {
             at: now
         )
         apply(assessment)
+    }
+
+    func takeFive() {
+        apply(state: .routine, reasons: [.belowDriftThreshold])
+        countdownText = "Take five. Offshift will check local aggregate activity again when you return."
     }
 
     func startPreLockCountdown() {
@@ -196,7 +228,11 @@ final class CompanionStore: ObservableObject {
             return
         }
         persistLocalControl()
-        apply(riskPolicy.assess(intervals, context: .init(), at: .now))
+        apply(riskPolicy.assess(
+            intervals,
+            context: WorkPatternRiskContext(isInsideQuietHours: nightCareSettings.isInsideQuietHours()),
+            at: .now
+        ))
         samplingStatus = "Sampling aggregate active time locally. No content leaves this Mac."
     }
 
@@ -222,6 +258,8 @@ final class CompanionStore: ObservableObject {
         } else if !wasProtect {
             hasStartedCountdownForProtectEpisode = false
             maybeStartAutomaticCountdown()
+            protectionPresentationToken &+= 1
+            NSApp.activate(ignoringOtherApps: true)
         }
         onCallMessage = nil
     }

@@ -1,6 +1,6 @@
 # Offshift
 
-Offshift is a ChatGPT App for developers who need an intentional way to leave a work loop. It turns a chosen focus threshold into a small, reversible break ritual: show the next break, plan it, start it, or snooze it.
+Offshift is a ChatGPT App for developers who need an intentional way to leave a work loop. It turns a chosen focus threshold into a small, reversible break ritual: inspect the suggestion, prepare a reset, snooze it, or take a bounded on-call override.
 
 The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Cloudflare Worker-compatible demo API, and a local macOS companion. It does not inspect code or screen content, call arbitrary smart-home URLs, or implement Screen Time controls. The companion can run only one locally configured Home Assistant `wind-down` scene after direct local confirmation.
 
@@ -18,8 +18,8 @@ The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Clou
 
 1. Ask ChatGPT: “Show my Offshift status.”
 2. The dashboard displays a deterministic focus snapshot and suggests a five-minute break.
-3. Select `Start break` or `Snooze 5 min`.
-4. The MCP tool returns the updated plan. In production, a user-approved macOS companion would display the local action-required screen and invoke an allowlisted home scene.
+3. Select `Prepare a 5-minute reset`, `Snooze 5 min`, or `I’m on call for 60 min`.
+4. The MCP tool returns the updated plan. It never starts a local notification, scene, or Lock Screen action. Those actions belong solely to the separately configured macOS companion.
 
 ## Development
 
@@ -38,7 +38,7 @@ pnpm install
 pnpm start
 ```
 
-The server will expose `http://localhost:8000/mcp`. A public HTTPS tunnel is required to test it in ChatGPT Developer Mode. See [docs/offshift/architecture.md](docs/offshift/architecture.md) for the complete boundary and [docs/offshift/tool-contract.md](docs/offshift/tool-contract.md) for the tool surface.
+The server will expose `http://localhost:8000/mcp`. A public HTTPS endpoint is required to test it in ChatGPT Developer Mode. The current Worker candidate is available at `https://offshift-demo-api.tixo-digital.workers.dev/mcp`; it remains a demo until the Developer Mode golden prompts are recorded. See [docs/offshift/architecture.md](docs/offshift/architecture.md) for the complete boundary and [docs/offshift/tool-contract.md](docs/offshift/tool-contract.md) for the tool surface.
 
 Build and verify the local macOS host:
 
@@ -50,4 +50,4 @@ swift test
 
 ## Status
 
-Tracked in [tixo-digital/program#150](https://gitlab.com/tixo-digital/program/-/work_items/150). The first implementation is a local demo; no production deployment or real device integration is enabled.
+Tracked in [tixo-digital/program#150](https://gitlab.com/tixo-digital/program/-/work_items/150). The public Worker is a demo control plane only: no production credentials, real device integration, or remote lock authority is enabled.

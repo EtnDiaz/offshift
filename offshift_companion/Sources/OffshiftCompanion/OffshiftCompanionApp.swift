@@ -15,9 +15,9 @@ struct OffshiftCompanionApp: App {
 
         WindowGroup("Offshift protection", id: "protection") {
             ProtectionWindowView(store: store)
-                .frame(minWidth: 440, minHeight: 300)
+                .frame(minWidth: 620, minHeight: 480)
         }
-        .defaultSize(width: 480, height: 340)
+        .defaultSize(width: 680, height: 560)
 
         MenuBarExtra("Offshift", systemImage: "moon.stars") {
             MenuBarContent(store: store)

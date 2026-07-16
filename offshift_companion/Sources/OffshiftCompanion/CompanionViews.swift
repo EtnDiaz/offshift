@@ -38,6 +38,9 @@ struct CompanionDashboardView: View {
             GroupBox("Your control") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(store.localControlSummary)
+                    Text(store.nightCareSettings.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text("These controls work only on this Mac. ChatGPT cannot pause, resume, or turn Offshift off for you.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -68,14 +71,8 @@ struct CompanionDashboardView: View {
                 HStack {
                     Button("Routine") { store.simulateRoutine() }
                     Button("Drift") { store.simulateDrift() }
-                    Button("Protect") {
-                        store.simulateProtect()
-                        openWindow(id: "protection")
-                    }
-                    Button("Late-session fixture") {
-                        store.simulateLateSessionRisk()
-                        openWindow(id: "protection")
-                    }
+                    Button("Protect") { store.simulateProtect() }
+                    Button("Late-session fixture") { store.simulateLateSessionRisk() }
                 }
             }
             #endif
@@ -85,6 +82,9 @@ struct CompanionDashboardView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(24)
+        .onChange(of: store.protectionPresentationToken) { _, _ in
+            openWindow(id: "protection")
+        }
     }
 }
 
@@ -94,23 +94,32 @@ struct ProtectionWindowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Time to protect your wind-down")
+            Text(store.careHeadline)
                 .font(.title2.weight(.semibold))
-            Text("This is a local, cancellable intervention. It cannot end your work, access your code, or lock your Mac from ChatGPT.")
+            Text(store.careMessage)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.secondary)
+            Text("This is your gentle ejection from work for tonight — not a punishment. Nothing here ends your work or reaches your code.")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(store.careReason)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(store.countdownText)
                 .font(.callout)
 
             HStack {
-                Button("Take 5") { store.simulateRoutine() }
+                Button("Take 5") { store.takeFive() }
                     .buttonStyle(.borderedProminent)
                 Button("On call for 15 min") { store.grantOnCallOverride() }
+                Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
+            }
+            HStack {
                 Button("Cancel countdown") { store.cancelPreLockCountdown() }
                 Button("Start 30-second countdown") { store.startPreLockCountdown() }
                     .disabled(!store.canStartCountdown)
             }
-
-            Button("Pause Offshift until tomorrow") { store.pauseUntilTomorrow() }
 
             Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
                 .font(.callout.weight(.medium))
@@ -150,7 +159,9 @@ struct ProtectionWindowView: View {
                     .font(.caption)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
+        .padding(.top, 28)
     }
 }
 
@@ -206,6 +217,33 @@ struct CompanionSettingsView: View {
                     }
                 }
                 Text(store.lockScreenSettings.accessibilityStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Night care") {
+                Toggle("Enable nightly care", isOn: Binding(
+                    get: { store.nightCareSettings.isEnabled },
+                    set: { store.nightCareSettings.setEnabled($0) }
+                ))
+                Text("Quiet hours add context to sustained local activity. Time alone never opens protection or triggers a Lock Screen action.")
+                    .foregroundStyle(.secondary)
+                Picker("Starts", selection: Binding(
+                    get: { store.nightCareSettings.startHour },
+                    set: { store.nightCareSettings.setStartHour($0) }
+                )) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(NightCareSettings.hourLabel(hour)).tag(hour)
+                    }
+                }
+                Picker("Ends", selection: Binding(
+                    get: { store.nightCareSettings.endHour },
+                    set: { store.nightCareSettings.setEndHour($0) }
+                )) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(NightCareSettings.hourLabel(hour)).tag(hour)
+                    }
+                }
+                Text(store.nightCareSettings.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

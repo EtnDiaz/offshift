@@ -134,6 +134,27 @@ final class LocalInterventionGateTests: XCTestCase {
     }
 }
 
+final class QuietHoursScheduleTests: XCTestCase {
+    func testOvernightQuietHoursIncludeMidnightAndExcludeTheEndHour() {
+        let schedule = QuietHoursSchedule(startHour: 23, endHour: 7)
+
+        XCTAssertFalse(schedule.contains(hour: 22))
+        XCTAssertTrue(schedule.contains(hour: 23))
+        XCTAssertTrue(schedule.contains(hour: 0))
+        XCTAssertTrue(schedule.contains(hour: 6))
+        XCTAssertFalse(schedule.contains(hour: 7))
+    }
+
+    func testSameDayQuietHoursRespectBothBoundaries() {
+        let schedule = QuietHoursSchedule(startHour: 13, endHour: 17)
+
+        XCTAssertFalse(schedule.contains(hour: 12))
+        XCTAssertTrue(schedule.contains(hour: 13))
+        XCTAssertTrue(schedule.contains(hour: 16))
+        XCTAssertFalse(schedule.contains(hour: 17))
+    }
+}
+
 final class HomeAssistantWindDownTests: XCTestCase {
     func testOnlyFixedWindDownSceneCanBeEncodedIntoARequest() throws {
         let configuration = try HomeAssistantWindDownConfiguration(
