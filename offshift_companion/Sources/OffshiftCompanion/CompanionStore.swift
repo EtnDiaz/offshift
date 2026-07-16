@@ -13,13 +13,20 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var countdownText = "No countdown running"
     @Published private(set) var lockRuleEnabled = false
     @Published private(set) var onCallMessage: String?
+    @Published private(set) var samplingStatus = "Local aggregate sampling is starting"
 
     private let shadowLog = InMemoryShadowModeLog()
     private let lockAdapter = NeverLockingTestAdapter()
     private var controller: InterventionController
+    private let riskPolicy = WorkPatternRiskPolicy()
+    private let sampler = MacActivitySampler()
 
     init() {
         controller = InterventionController(lockAdapter: lockAdapter, shadowLog: shadowLog)
+        sampler.onIntervalsChanged = { [weak self] intervals in
+            self?.applyLiveIntervals(intervals)
+        }
+        sampler.start()
     }
 
     var stateLabel: String { assessment.state.rawValue.capitalized }
@@ -36,6 +43,26 @@ final class CompanionStore: ObservableObject {
 
     func simulateProtect() {
         apply(state: .protect, reasons: [.protectContinuousActivity])
+    }
+
+    func simulateLateSessionRisk() {
+        let now = Date.now
+        let assessment = riskPolicy.assess(
+            [
+                ActiveAppInterval(
+                    startedAt: now.addingTimeInterval(-50 * 60),
+                    activeDuration: 50 * 60,
+                    appIdentifier: "active-session"
+                )
+            ],
+            context: WorkPatternRiskContext(
+                isInsideQuietHours: true,
+                snoozeCount: 2,
+                hasNextDayEarlyStartConfigured: true
+            ),
+            at: now
+        )
+        apply(assessment)
     }
 
     func startPreLockCountdown() {
@@ -66,14 +93,23 @@ final class CompanionStore: ObservableObject {
         }
     }
 
+    private func applyLiveIntervals(_ intervals: [ActiveAppInterval]) {
+        apply(riskPolicy.assess(intervals, context: .init(), at: .now))
+        samplingStatus = "Sampling aggregate active time locally. No content leaves this Mac."
+    }
+
     private func apply(state: InterventionState, reasons: [AssessmentReason]) {
-        assessment = WorkPatternAssessment(
+        apply(WorkPatternAssessment(
             state: state,
             totalActiveDuration: state == .protect ? 95 * 60 : state == .drift ? 55 * 60 : 20 * 60,
             currentContinuousActiveDuration: state == .protect ? 95 * 60 : state == .drift ? 55 * 60 : 20 * 60,
             appSwitchCount: 0,
             reasons: reasons
-        )
+        ))
+    }
+
+    private func apply(_ nextAssessment: WorkPatternAssessment) {
+        assessment = nextAssessment
         _ = controller.apply(assessment, at: .now)
         countdownText = "No countdown running"
         onCallMessage = nil

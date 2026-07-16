@@ -14,6 +14,26 @@ public struct ActiveAppInterval: Equatable, Sendable {
     }
 }
 
+/// Converts a local sample period into a coarse active interval. Callers provide only
+/// elapsed durations; no event payload, application title, code, or screen content is accepted.
+public enum AggregateActivityIntervalFactory {
+    public static func make(
+        endingAt now: Date,
+        sampleDuration: TimeInterval,
+        idleDuration: TimeInterval,
+        opaqueCategory: String = "active-session"
+    ) -> ActiveAppInterval? {
+        guard sampleDuration > 0 else { return nil }
+        let activeDuration = max(0, sampleDuration - max(0, idleDuration))
+        guard activeDuration > 0 else { return nil }
+        return ActiveAppInterval(
+            startedAt: now.addingTimeInterval(-activeDuration),
+            activeDuration: activeDuration,
+            appIdentifier: opaqueCategory
+        )
+    }
+}
+
 public enum InterventionState: String, Codable, CaseIterable, Sendable {
     case routine
     case drift
@@ -27,6 +47,9 @@ public enum AssessmentReason: String, Codable, CaseIterable, Sendable {
     case sustainedActivityWithFrequentSwitching
     case protectContinuousActivity
     case protectActivityWithFrequentSwitching
+    case insideQuietHours
+    case repeatedSnoozes
+    case nextDayEarlyStartConfigured
 }
 
 public struct WorkPatternAssessment: Equatable, Sendable {
@@ -212,6 +235,72 @@ public struct WorkPatternHeuristic: Sendable {
             previousApp = interval.appIdentifier
         }
         return switches
+    }
+}
+
+/// Extra context a user can choose to include in a work-pattern explanation.
+/// It intentionally contains only coarse, non-content facts. Calendar access, Screen Time,
+/// camera frames, and biometric inferences are not represented here.
+public struct WorkPatternRiskContext: Equatable, Sendable {
+    public var isInsideQuietHours: Bool
+    public var snoozeCount: Int
+    public var hasNextDayEarlyStartConfigured: Bool
+
+    public init(
+        isInsideQuietHours: Bool = false,
+        snoozeCount: Int = 0,
+        hasNextDayEarlyStartConfigured: Bool = false
+    ) {
+        self.isInsideQuietHours = isInsideQuietHours
+        self.snoozeCount = max(0, snoozeCount)
+        self.hasNextDayEarlyStartConfigured = hasNextDayEarlyStartConfigured
+    }
+}
+
+/// Combines aggregate activity with opted-in context while preserving explainability.
+/// Context alone never creates an intervention: active time is always required.
+public struct WorkPatternRiskPolicy: Sendable {
+    public let activityHeuristic: WorkPatternHeuristic
+    public let snoozesRequiredForProtectEscalation: Int
+
+    public init(
+        activityHeuristic: WorkPatternHeuristic = .init(),
+        snoozesRequiredForProtectEscalation: Int = 2
+    ) {
+        precondition(snoozesRequiredForProtectEscalation > 0)
+        self.activityHeuristic = activityHeuristic
+        self.snoozesRequiredForProtectEscalation = snoozesRequiredForProtectEscalation
+    }
+
+    public func assess(
+        _ intervals: [ActiveAppInterval],
+        context: WorkPatternRiskContext,
+        at now: Date
+    ) -> WorkPatternAssessment {
+        let activity = activityHeuristic.assess(intervals, at: now)
+        guard activity.state != .routine else { return activity }
+
+        var reasons = activity.reasons
+        if context.isInsideQuietHours {
+            reasons.append(.insideQuietHours)
+        }
+        if context.snoozeCount >= snoozesRequiredForProtectEscalation {
+            reasons.append(.repeatedSnoozes)
+        }
+        if context.hasNextDayEarlyStartConfigured {
+            reasons.append(.nextDayEarlyStartConfigured)
+        }
+
+        let escalatesToProtect = activity.state == .drift
+            && context.isInsideQuietHours
+            && context.snoozeCount >= snoozesRequiredForProtectEscalation
+        return WorkPatternAssessment(
+            state: escalatesToProtect ? .protect : activity.state,
+            totalActiveDuration: activity.totalActiveDuration,
+            currentContinuousActiveDuration: activity.currentContinuousActiveDuration,
+            appSwitchCount: activity.appSwitchCount,
+            reasons: reasons
+        )
     }
 }
 

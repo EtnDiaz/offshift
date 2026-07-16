@@ -32,7 +32,7 @@ The ChatGPT App is the planner and dashboard. A local companion owns desktop not
 
 ### Local companion
 
-`offshift_companion` now provides a SwiftPM menu-bar/window host around the local core: a dashboard, an intervention window, and a Settings scene. It uses deterministic fixture states until a local aggregate-time sampler is connected. The companion sends only aggregate session facts such as `coding_active_seconds`, idle state, configured quiet-hours state, and bounded break-action history. It may accept an opt-in boolean that a Codex session is active, but never prompt, code, terminal, repository, or screen content. The companion owns the optional Lock Screen rule entirely locally. It receives a signed, short-lived, device-scoped instruction only for local overlay changes or user-approved scene identifiers; server instructions cannot lock a device.
+`offshift_companion` now provides a SwiftPM menu-bar/window host around the local core: a dashboard, an intervention window, and a Settings scene. It samples local elapsed active/idle time and passes opaque aggregate `active-session` intervals into the heuristic; it never retains app titles or content. The companion sends only aggregate session facts such as `coding_active_seconds`, idle state, configured quiet-hours state, and bounded break-action history. It may accept an opt-in boolean that a Codex session is active, but never prompt, code, terminal, repository, or screen content. The companion owns the optional Lock Screen rule entirely locally. It receives a signed, short-lived, device-scoped instruction only for local overlay changes or user-approved scene identifiers; server instructions cannot lock a device.
 
 ## Data minimization
 

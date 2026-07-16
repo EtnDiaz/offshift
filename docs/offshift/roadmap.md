@@ -28,15 +28,16 @@ The first heuristic runs locally with user-controlled thresholds. It may conside
 - local time inside a user-configured quiet-hours window;
 - total active time since the last accepted break;
 - a run of snoozes or dismissals; and
+- an explicitly configured next-day early-start reminder, as explanation only; and
 - optionally, a boolean that a Codex session is active.
 
-It may not inspect prompts, code, diffs, terminal output, filenames, browser history, keystrokes, screenshots, camera, or microphone input. "Codex session active" is only a coarse opt-in state supplied by a local integration; it is not something the ChatGPT App can infer remotely.
+It may not inspect prompts, code, diffs, terminal output, filenames, browser history, keystrokes, screenshots, microphone input, or camera frames. "Codex session active" is only a coarse opt-in state supplied by a local integration; it is not something the ChatGPT App can infer remotely. A future camera experiment may provide only a local presence-at-device bit to reduce false positives; it never judges whether a face looks tired or infers health, emotion, identity, age, or attention. Screen Time is a later native integration and may contribute only consented category aggregates, never browser or app content.
 
 Use three explainable bands rather than an opaque score:
 
 1. **Routine** — dashboard shows the next break only.
-2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago.”
-3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. A user who has explicitly enabled the optional local Lock Screen rule also sees a cancellable countdown; the companion may then invoke macOS's own Lock Screen. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
+2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago; tomorrow's early start is enabled.”
+3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule also sees a cancellable countdown; the companion may then invoke macOS's own Lock Screen. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
 
 The user must see the contributing categories, change thresholds, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
 
@@ -51,7 +52,7 @@ The user must see the contributing categories, change thresholds, turn Offshift 
 | ChatGPT planner/dashboard | Must | Lets a developer inspect, explain, and modify the ritual conversationally. | Golden prompts pass in Developer Mode through a public HTTPS MCP endpoint. |
 | One Home Assistant scene | Should | Makes the ritual tangible; is useful only if the core nudge already helps. | One participant uses it repeatedly and it remains fully allowlisted. |
 | Codex active-state integration | Could | Can improve context, but must remain one boolean and optional. | It improves timeliness without requiring content collection. |
-| Gesture/camera trigger inspired by Red Card | Could | Good demo moment, but not required for the core loop. | Users choose it over a simple local control. |
+| Local camera-presence experiment | Later / opt-in | May reduce false positives when someone has left the desk. | Frames remain on device and unretained; no face/fatigue/emotion inference; users understand the indicator and turn it off easily. |
 | Apple Screen Time | Later | Separate native entitlement/distribution risk and not required for macOS value. | Feasibility and user need are both confirmed. |
 | Arbitrary smart-home commands, auto-ending work, surveillance | Never | Violates safety, privacy, and user agency. | Not applicable. |
 
@@ -61,7 +62,7 @@ The user must see the contributing categories, change thresholds, turn Offshift 
 2. **Worker/API tests** — validation, authorization boundaries, offline/retry behaviour, and persistence migration tests.
 3. **MCP integration tests** — tool descriptors, UI resource MIME type/CSP, render data, and repeated tool calls.
 4. **ChatGPT Developer Mode tests** — use an HTTPS endpoint, execute direct/indirect/negative golden prompts, record selected tools and arguments, and check small layouts. ChatGPT Apps require an HTTPS MCP endpoint; rebuild, restart, and refresh the app metadata while iterating. [OpenAI Apps SDK deployment guide](https://developers.openai.com/apps-sdk/deploy) and [testing guide](https://developers.openai.com/apps-sdk/deploy/testing).
-5. **Companion manual tests** — permission denial, quiet-hours boundary, idle/resume, on-call override expiry, instant disable, reboot, no network, pre-lock cancel, one-lock-per-night, and restoration after the system Lock Screen.
+5. **Companion manual tests** — permission denial, quiet-hours boundary, idle/resume, repeat-snooze and early-start explanations, instant disable, reboot, no network, pre-lock cancel, one-lock-per-night, and restoration after the system Lock Screen. Camera work, if ever piloted, adds a local-only/no-frame-retention audit rather than a fatigue test.
 6. **Pilot evidence** — five opt-in developers, short interviews after several sessions, and only aggregate local event logs. Review false positives before enabling overlays.
 
 ## Immediate next work

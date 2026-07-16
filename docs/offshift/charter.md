@@ -10,7 +10,7 @@ Offshift notices an opt-in *work-pattern risk* and gives a developer a clear nex
 
 ## MVP user journey
 
-1. A local companion aggregates only opted-in, non-content signals such as active duration, idle gaps, configured quiet hours, and prior snoozes.
+1. A local companion aggregates only opted-in, non-content signals such as active duration, idle gaps, configured quiet hours, prior snoozes, and an explicitly configured early-start reminder. It explains factors instead of judging fatigue or doomscrolling.
 2. A developer opens Offshift in ChatGPT and asks for their status, or the local companion raises a bounded nudge at an agreed threshold.
 3. The app presents the observed pattern and an explicit break plan.
 4. The developer starts the break, snoozes it by five minutes, or selects an on-call override with a reason and a return time. In a separately enabled Protect mode, they see a local pre-lock countdown and can cancel it before the macOS Lock Screen is invoked.
@@ -25,6 +25,7 @@ Offshift notices an opt-in *work-pattern risk* and gives a developer a clear nex
 - Arbitrary remote device controls triggered by model text.
 - A custom or deceptive lock screen; only the operating system's own Lock Screen may be invoked by the local companion.
 - Screen Time API integration; it requires a separate native iOS workstream and Apple entitlements.
+- Facial fatigue, emotion, identity, gaze, or health inference. A future camera-presence experiment cannot retain or transmit frames.
 
 ## Success criteria
 

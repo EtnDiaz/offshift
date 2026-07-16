@@ -28,6 +28,9 @@ struct CompanionDashboardView: View {
                     Text("Only aggregate local timing is used. No code, prompts, terminal output, or screen content is collected.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text(store.samplingStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -39,11 +42,15 @@ struct CompanionDashboardView: View {
                     store.simulateProtect()
                     openWindow(id: "protection")
                 }
+                Button("Late-session fixture") {
+                    store.simulateLateSessionRisk()
+                    openWindow(id: "protection")
+                }
                 Spacer()
                 Button("Open protection") { openWindow(id: "protection") }
             }
 
-            Text("Demo controls use deterministic fixture states. The production host will feed the same core only coarse local aggregate intervals.")
+            Text("The companion samples only aggregate active/idle time locally. The buttons remain deterministic fixtures; the late-session fixture combines quiet hours, repeated snoozes, and a configured early start without inferring fatigue.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

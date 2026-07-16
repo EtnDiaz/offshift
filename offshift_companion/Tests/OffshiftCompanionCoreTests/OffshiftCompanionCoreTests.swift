@@ -11,6 +11,19 @@ final class WorkPatternHeuristicTests: XCTestCase {
         XCTAssertEqual(assessment.reasons, [.noRecentActivity])
     }
 
+    func testAggregateSampleFactoryNeverRetainsApplicationContent() {
+        let interval = AggregateActivityIntervalFactory.make(
+            endingAt: now,
+            sampleDuration: 60,
+            idleDuration: 15
+        )
+
+        XCTAssertEqual(interval?.activeDuration, 45)
+        XCTAssertEqual(interval?.startedAt, now.addingTimeInterval(-45))
+        XCTAssertEqual(interval?.appIdentifier, "active-session")
+        XCTAssertNil(AggregateActivityIntervalFactory.make(endingAt: now, sampleDuration: 60, idleDuration: 60))
+    }
+
     func testContinuousActivityMovesThroughDriftToProtectDeterministically() {
         let heuristic = WorkPatternHeuristic()
         let drift = heuristic.assess([
@@ -24,6 +37,50 @@ final class WorkPatternHeuristicTests: XCTestCase {
         XCTAssertEqual(drift.reasons, [.sustainedContinuousActivity])
         XCTAssertEqual(protect.state, .protect)
         XCTAssertEqual(protect.reasons, [.protectContinuousActivity])
+    }
+
+    func testContextExplainsLateSessionAndRepeatedSnoozesCanEscalateDrift() {
+        let assessment = WorkPatternRiskPolicy().assess(
+            [
+                ActiveAppInterval(
+                    startedAt: now.addingTimeInterval(-50 * 60),
+                    activeDuration: 50 * 60,
+                    appIdentifier: "active-session"
+                )
+            ],
+            context: WorkPatternRiskContext(
+                isInsideQuietHours: true,
+                snoozeCount: 2,
+                hasNextDayEarlyStartConfigured: true
+            ),
+            at: now
+        )
+
+        XCTAssertEqual(assessment.state, .protect)
+        XCTAssertEqual(
+            assessment.reasons,
+            [
+                .sustainedContinuousActivity,
+                .insideQuietHours,
+                .repeatedSnoozes,
+                .nextDayEarlyStartConfigured
+            ]
+        )
+    }
+
+    func testContextCannotEscalateWithoutRecentActivity() {
+        let assessment = WorkPatternRiskPolicy().assess(
+            [],
+            context: WorkPatternRiskContext(
+                isInsideQuietHours: true,
+                snoozeCount: 99,
+                hasNextDayEarlyStartConfigured: true
+            ),
+            at: now
+        )
+
+        XCTAssertEqual(assessment.state, .routine)
+        XCTAssertEqual(assessment.reasons, [.noRecentActivity])
     }
 
     func testSubstantialBreakResetsContinuousActivity() {

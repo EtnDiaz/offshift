@@ -11,12 +11,14 @@
 
 Scheduling and snoozing require an explicit current-turn action. The future companion asks for direct local confirmation before an external scene is run unless the user enabled a specific automation rule locally.
 
-Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterrupted-work window, whether a Codex-session-active signal is allowed, and an immediate disable switch. Incident/on-call mode must silence all nudges for a bounded duration and leave an audit entry; it must never be a hidden bypass.
+Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterrupted-work window, whether a Codex-session-active signal is allowed, whether an early-start reminder may be used, and an immediate disable switch. Incident/on-call mode must silence all nudges for a bounded duration and leave an audit entry; it must never be a hidden bypass.
 
 ## Behaviour-model guardrails
 
 - A `work-pattern risk` is a product heuristic, not a medical, sleep, mental-health, productivity, or performance score.
-- Signals are coarse local aggregates only: elapsed active time, idle gaps, local time relative to user-configured quiet hours, accepted/snoozed/dismissed break events, and optionally a boolean that a Codex session is active. No prompt text, diffs, terminal output, filenames, keystrokes, screenshots, camera, or microphone data is collected.
+- Signals are coarse local aggregates only: elapsed active time, idle gaps, local time relative to user-configured quiet hours, accepted/snoozed/dismissed break events, an explicitly configured next-day early-start bit, and optionally a boolean that a Codex session is active. No prompt text, diffs, terminal output, filenames, keystrokes, screenshots, microphone data, or camera frames are collected.
+- A future camera-presence experiment needs a separate local consent control and visible indicator. It may retain only a present/absent outcome on-device long enough to prevent a false nudge; raw frames are never persisted, logged, sent to the Worker, sent to ChatGPT, or made model-visible. It must not infer or claim fatigue, emotion, identity, age, gaze, attention, sleep, or health.
+- Screen Time / Family Controls remains outside this MVP. If a native workstream is approved, it may use only user-authorized, coarse category aggregates; it may not read browsing content or present a category as proof of "doomscrolling."
 - Every nudge exposes the contributing categories (for example, "90 minutes active" and "quiet hours started"), controls to snooze/disable it, and a way to mark it unhelpful.
 - Start in shadow mode: record what *would* have been suggested locally, but show nothing until the participant turns on nudges. The model never chooses thresholds or punishment actions.
 - Higher-risk states escalate only the clarity of the invitation. They cannot lock the computer, end a Codex session, submit code, message a colleague, or run an external action without an existing explicit local rule.
@@ -32,4 +34,4 @@ The macOS companion may invoke the system Lock Screen only after the user enable
 
 ## Logging
 
-Keep audit records to action type, opaque schedule id, timestamp, result, non-sensitive device alias, and coarse signal categories that caused a shown nudge. Do not log source code, screen content, raw usage history, OAuth tokens, or smart-home credentials.
+Keep audit records to action type, opaque schedule id, timestamp, result, non-sensitive device alias, and coarse signal categories that caused a shown nudge. Do not log source code, screen content, raw usage history, camera frames, biometric outputs, OAuth tokens, or smart-home credentials.

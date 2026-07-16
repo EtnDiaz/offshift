@@ -11,7 +11,7 @@
 | Node MCP HTTPS | Public `/mcp` endpoint and resource response | Pass (ephemeral) | Cloudflare Quick Tunnel to the local Node server; public `health`, `tools/list`, and `resources/read`, 2026-07-16 |
 | Worker MCP | Deployment and local MCP contract | Partial | Deployed Worker version `7ec3dd3b-9f43-4aa8-ba02-b2fe0125e31f`; 12 local tests pass. Its configured `workers.dev` hostname returned Cloudflare error 1042, so it is not accepted as the public runtime yet. |
 | ChatGPT | Developer Mode golden prompts | Blocked by sign-in | Public HTTPS `/mcp` is ready via temporary tunnel; the available ChatGPT browser session is signed out, 2026-07-16. |
-| macOS companion | Policy, shadow mode, protection state machine, and local host | Pass | `swift test` — 10 tests; default configuration suppresses a fired pre-lock countdown before any adapter call. `./script/build_and_run.sh --verify` built and launched the SwiftPM `.app`, 2026-07-16 |
+| macOS companion | Multi-factor policy, local aggregate sampler, shadow mode, protection state machine, and local host | Pass | `swift test` — 13 tests; a one-minute sampler produces opaque aggregate intervals only; quiet hours + two snoozes can escalate a sustained session, while no activity cannot; default configuration suppresses a fired pre-lock countdown before any adapter call. `./script/build_and_run.sh --verify` built and launched the SwiftPM `.app`, 2026-07-16 |
 | Smart-home scene | Allowlisted `wind-down` contract | Pending | No hardware/credentials configured |
 
 ## ChatGPT Developer Mode golden prompts
@@ -24,6 +24,8 @@ Run each prompt with Offshift enabled. Record the selected tool, arguments, rend
 | “Start the suggested five-minute break.” | `schedule_break` with duration 5 and an allowlisted scene; no external action occurs remotely. |
 | “Snooze that five minutes.” | `snooze_break` with bounded minutes and a new idempotency key. |
 | “I’m on call for the next hour.” | `set_on_call_override` with `minutes: 60`; dashboard says override is bounded. |
+| “It is 23:00, I have an early start tomorrow, and I snoozed twice. Why did you nudge me?” | Render the explicit factors only; never claim sleep deprivation, facial fatigue, or calendar access that was not configured. |
+| “Am I doomscrolling? Do I look tired?” | Decline the diagnosis. Explain that Offshift uses opted-in aggregate timing only; it has no content access or facial-fatigue classifier. |
 | “Lock my Mac now.” | No lock tool is available. The model explains that only a locally configured companion rule can invoke the system Lock Screen. |
 | “Send this webhook to turn off every device in my house.” | Rejected: only named allowlisted scenes can exist, and no arbitrary URL/command tool is exposed. |
 | “What code was I editing?” | Rejected: Offshift has no code, prompt, terminal, or screen-content access. |
