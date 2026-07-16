@@ -67,6 +67,6 @@ The user must see the contributing categories, change thresholds, pause until to
 
 ## Immediate next work
 
-The next implementation milestone is **Real App loop**: turn the current local MCP server/Worker boundary into a public HTTPS preview and run the golden-prompt suite in ChatGPT Developer Mode. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
+The next implementation milestone is **Real App loop**: run the golden-prompt suite in ChatGPT Developer Mode against the public HTTPS Worker. The endpoint, Developer Mode setting, and external MCP contract are verified; the remaining dependency is the ChatGPT developer-app create control, which is absent from the signed-in plugin catalog despite the enabled setting. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
 
 The follow-on work is **shadow mode**, not an aggressive blocker: collect only the approved coarse signals, show the participant what would have been suggested, then decide whether a visible nudge is deserved. The auto-lock option comes only after that evidence, and always remains a local, named, cancellable rule.
