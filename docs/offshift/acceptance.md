@@ -11,7 +11,7 @@
 | Node MCP HTTPS | Public `/mcp` endpoint and resource response | Pass (ephemeral) | Cloudflare Quick Tunnel to the local Node server; public `health`, `tools/list`, and `resources/read`, 2026-07-16 |
 | Worker MCP | Deployment and local MCP contract | Partial | Deployed Worker version `7ec3dd3b-9f43-4aa8-ba02-b2fe0125e31f`; 12 local tests pass. Its configured `workers.dev` hostname returned Cloudflare error 1042, so it is not accepted as the public runtime yet. |
 | ChatGPT | Developer Mode golden prompts | Blocked by sign-in | Public HTTPS `/mcp` is ready via temporary tunnel; the available ChatGPT browser session is signed out, 2026-07-16. |
-| macOS companion | Policy, shadow mode, protection state machine | Pass | `swift test` — 10 tests; default configuration suppresses a fired pre-lock countdown before any adapter call, 2026-07-16 |
+| macOS companion | Policy, shadow mode, protection state machine, and local host | Pass | `swift test` — 10 tests; default configuration suppresses a fired pre-lock countdown before any adapter call. `./script/build_and_run.sh --verify` built and launched the SwiftPM `.app`, 2026-07-16 |
 | Smart-home scene | Allowlisted `wind-down` contract | Pending | No hardware/credentials configured |
 
 ## ChatGPT Developer Mode golden prompts

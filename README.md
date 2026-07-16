@@ -9,6 +9,7 @@ The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Clou
 - `src/offshift/` — React widget. Standard controls use `@openai/apps-sdk-ui` only.
 - `offshift_worker/` — standalone Cloudflare Worker demo API, owned by its package tests.
 - `offshift_server_node/` — local MCP server that exposes the widget in ChatGPT Developer Mode.
+- `offshift_companion/` — SwiftPM macOS menu-bar/window host for the local policy core; its Lock Screen rule is disabled by default.
 - `docs/offshift/` — product charter, architecture, tool contract, safety model, [delivery roadmap](docs/offshift/roadmap.md), and [mascot brief](docs/offshift/mascot.md).
 - `docs/adr/` — accepted architectural decisions; [MVP milestone definition](docs/offshift/milestone.md) maps them to GitLab delivery evidence.
 - `docs/offshift/acceptance.md` — [golden prompts and current test evidence](docs/offshift/acceptance.md).
@@ -38,6 +39,14 @@ pnpm start
 ```
 
 The server will expose `http://localhost:8000/mcp`. A public HTTPS tunnel is required to test it in ChatGPT Developer Mode. See [docs/offshift/architecture.md](docs/offshift/architecture.md) for the complete boundary and [docs/offshift/tool-contract.md](docs/offshift/tool-contract.md) for the tool surface.
+
+Build and verify the local macOS host:
+
+```bash
+cd offshift_companion
+swift test
+./script/build_and_run.sh --verify
+```
 
 ## Status
 

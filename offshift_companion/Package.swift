@@ -5,10 +5,15 @@ let package = Package(
     name: "OffshiftCompanion",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "OffshiftCompanionCore", targets: ["OffshiftCompanionCore"])
+        .library(name: "OffshiftCompanionCore", targets: ["OffshiftCompanionCore"]),
+        .executable(name: "OffshiftCompanion", targets: ["OffshiftCompanion"])
     ],
     targets: [
         .target(name: "OffshiftCompanionCore"),
+        .executableTarget(
+            name: "OffshiftCompanion",
+            dependencies: ["OffshiftCompanionCore"]
+        ),
         .testTarget(
             name: "OffshiftCompanionCoreTests",
             dependencies: ["OffshiftCompanionCore"]

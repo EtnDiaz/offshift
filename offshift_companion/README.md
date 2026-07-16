@@ -11,13 +11,14 @@ This SwiftPM package contains the local decision core for the future macOS compa
 - `NeverLockingTestAdapter` is the only default `LocalLockAdapter`. It records requests and **never locks the screen**.
 - `InMemoryShadowModeLog` is suitable for tests; `LocalShadowModeLog` appends JSON-lines to a caller-selected local file.
 
-The host app is responsible for sampling active-app timing, presenting any prompt, ticking the countdown, choosing a local log location, and—only after a separate user-approved integration—providing a real local lock adapter.
+The included macOS host is a menu-bar and window-based fixture over the core. It makes routine/drift/protect state, the cancellable intervention window, and bounded on-call behaviour visible. Its Lock Screen control is deliberately disabled and no real adapter ships in this build.
 
 ## Development
 
 ```sh
 cd offshift_companion
 swift test
+./script/build_and_run.sh --verify
 ```
 
 ## Coordination handoff
