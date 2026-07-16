@@ -11,15 +11,17 @@ The endpoint follows the project's interactive-decoupled Apps SDK shape:
 | Tool | Role | Safety |
 | --- | --- | --- |
 | `get_focus_snapshot` | Data | Read-only aggregate focus data; omits the legacy REST `focusScore` from model-visible output. |
-| `get_behavior_policy_snapshot` | Data | Read-only, explainable routine/drift/protect policy plus a shadow-mode aggregate snapshot. |
+| `get_work_pattern_snapshot` | Data | Read-only, explainable routine/drift/protect policy plus a shadow-mode aggregate snapshot. |
 | `preview_break_plan` | Data | Read-only preview of one allowlisted action. |
 | `schedule_break` | Mutation | Explicit, bounded, closed-world; requires an idempotency key. |
 | `snooze_break` | Mutation | Explicit, bounded, closed-world; requires an idempotency key. |
+| `set_on_call_override` | Mutation | Explicit, bounded on-call exception; requires an idempotency key. |
+| `resume_reminders` | Mutation | Explicitly ends the on-call exception; requires an idempotency key. |
 | `render_offshift_dashboard` | Render | The only tool with `_meta.ui.resourceUri` and `openai/outputTemplate`. |
 
-`resources/read` serves the versioned `ui://widget/offshift-worker-v1.html` resource as `text/html;profile=mcp-app`. Its deliberate CSP has empty `connectDomains` and `resourceDomains`, and its small read-only renderer uses the MCP Apps `postMessage` bridge (`ui/initialize` and `ui/notifications/tool-result`) rather than `window.openai`.
+`resources/read` serves the versioned `ui://widget/offshift-worker-v3.html` resource as `text/html;profile=mcp-app`. Its deliberate CSP has empty `connectDomains` and an allowlist only for the Worker-hosted React assets. The widget uses the MCP Apps bridge; it does not depend on `window.openai`.
 
-The resource is a host-contract smoke-test renderer, not a replacement for the repository's React dashboard. It intentionally has no custom buttons or external assets; the existing React widget remains the standard-control implementation. A production integration must inject a built, version-bumped widget bundle into the Worker resource before claiming ChatGPT UI verification.
+The Worker injects the repository's built React dashboard as a versioned static asset. Read-only tools remain model-visible; all mutations are `app`-visible only and originate from an explicit dashboard click. Scheduling prepares a reset record only: a separate local companion remains the only authority for notifications, a scene, or Lock Screen.
 
 ## REST endpoints
 
@@ -54,7 +56,7 @@ curl -X POST http://localhost:8787/mcp \
 
 curl -X POST http://localhost:8787/mcp \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://widget/offshift-worker-v1.html"}}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://widget/offshift-worker-v3.html"}}'
 
 curl 'http://localhost:8787/v1/behavior/snapshot?userId=ada'
 ```

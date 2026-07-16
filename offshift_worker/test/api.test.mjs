@@ -39,7 +39,7 @@ test("health returns a stable service response", async () => {
     status: "ok",
     service: "offshift-demo-api",
     mcpPath: "/mcp",
-    widgetUri: "ui://widget/offshift-worker-v1.html",
+    widgetUri: "ui://widget/offshift-worker-v3.html",
   });
 });
 
@@ -146,10 +146,12 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
   const { tools } = await mcp(worker, 2, "tools/list");
   assert.deepEqual(tools.map((tool) => tool.name), [
     "get_focus_snapshot",
-    "get_behavior_policy_snapshot",
+    "get_work_pattern_snapshot",
     "preview_break_plan",
     "schedule_break",
+    "resume_reminders",
     "snooze_break",
+    "set_on_call_override",
     "render_offshift_dashboard",
   ]);
   const schedule = tools.find((tool) => tool.name === "schedule_break");
@@ -160,45 +162,43 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
     idempotentHint: true,
   });
   const render = tools.find((tool) => tool.name === "render_offshift_dashboard");
-  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v1.html");
-  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v1.html");
+  assert.deepEqual(schedule._meta.ui.visibility, ["app"]);
+  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v3.html");
+  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v3.html");
   assert.equal(tools.some((tool) => /webhook|lock|command/i.test(tool.name)), false);
 });
 
-test("MCP resource read returns a versioned Apps SDK widget with a closed CSP", async () => {
+test("MCP resource read returns the React widget with a tightly scoped CSP", async () => {
   const worker = app();
-  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v1.html" });
+  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v3.html" });
   assert.equal(contents.length, 1);
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
-  assert.deepEqual(contents[0]._meta.ui.csp, { connectDomains: [], resourceDomains: [] });
-  assert.match(contents[0].text, /ui\/initialize/);
+  assert.deepEqual(contents[0]._meta.ui.csp, {
+    connectDomains: [],
+    resourceDomains: ["https://offshift-demo-api.tixo-digital.workers.dev"],
+  });
+  assert.match(contents[0].text, /offshift\.js/);
   assert.doesNotMatch(contents[0].text, /window\.openai/);
 });
 
-test("MCP behavior snapshot is explainable, shadow-only, and cannot trigger remote actions", async () => {
+test("MCP work-pattern snapshot is explainable, shadow-only, and cannot trigger remote actions", async () => {
   const worker = app();
   const result = await mcp(worker, 4, "tools/call", {
-    name: "get_behavior_policy_snapshot",
+    name: "get_work_pattern_snapshot",
     arguments: { userId: "ada" },
   });
-  const { policy, snapshot } = result.structuredContent;
-  assert.equal(policy.mode, "shadow");
-  assert.equal(policy.decisionOwner, "local-companion");
-  assert.deepEqual(policy.forbiddenRemoteActions, [
-    "remote lock commands",
-    "ending a Codex session or submitting code",
-    "arbitrary webhooks or device commands",
-  ]);
-  assert.equal(snapshot.mode, "shadow");
-  assert.equal(snapshot.canTriggerRemoteAction, false);
-  assert.match(snapshot.explanation, /aggregate activity/);
+  const { behaviour } = result.structuredContent;
+  assert.equal(behaviour.shadowMode, true);
+  assert.equal(behaviour.lockScreenRule, "not-configured");
+  assert.ok(["routine", "drift", "protect"].includes(behaviour.level));
+  assert.match(behaviour.reasons.join(" "), /aggregate active-app time/);
 });
 
 test("MCP mutation retries are idempotent and require explicit idempotency keys", async () => {
   const worker = app();
   const params = {
     name: "schedule_break",
-    arguments: { action: "stretch", userId: "ada", startInMinutes: 5, idempotencyKey: "mcp-plan-0001" },
+    arguments: { durationMinutes: 5, sceneId: "wind-down", idempotencyKey: "mcp-plan-0001" },
   };
   const first = await mcp(worker, 5, "tools/call", params);
   const second = await mcp(worker, 6, "tools/call", params);
@@ -207,11 +207,41 @@ test("MCP mutation retries are idempotent and require explicit idempotency keys"
   const invalid = await worker.fetch(request("/mcp", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "schedule_break", arguments: { action: "stretch", startInMinutes: 5 } } }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "schedule_break", arguments: { durationMinutes: 5, sceneId: "wind-down" } } }),
   }), {}, {});
   const invalidBody = await responseJson(invalid);
   assert.equal(invalidBody.error.code, -32602);
   assert.match(invalidBody.error.message, /idempotencyKey is required/);
+});
+
+test("MCP dashboard output fits the React widget and on-call remains bounded", async () => {
+  const worker = app();
+  const dashboard = await mcp(worker, 9, "tools/call", { name: "render_offshift_dashboard", arguments: {} });
+  assert.equal(dashboard.structuredContent.snapshot.activeAppCategory, "coding");
+  assert.equal(dashboard.structuredContent.plan.sceneId, "wind-down");
+  assert.deepEqual(dashboard.structuredContent.allowedSceneIds, ["wind-down"]);
+
+  const override = await mcp(worker, 10, "tools/call", {
+    name: "set_on_call_override",
+    arguments: { minutes: 60, idempotencyKey: "on-call-0001" },
+  });
+  assert.equal(override.structuredContent.plan.status, "on-call");
+  assert.match(override.content[0].text, /No remote action/);
+
+  const resumed = await mcp(worker, 11, "tools/call", {
+    name: "resume_reminders",
+    arguments: { idempotencyKey: "resume-0001" },
+  });
+  assert.equal(resumed.structuredContent.plan.status, "suggested");
+});
+
+test("Worker wraps widget asset responses with cross-origin headers", async () => {
+  const worker = app();
+  const assets = { fetch: async () => new Response("bundle", { headers: { "content-type": "text/javascript" } }) };
+  const response = await worker.fetch(request("/offshift.js"), { ASSETS: assets }, {});
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.equal(response.headers.get("cross-origin-resource-policy"), "cross-origin");
 });
 
 test("the Worker exposes no remote lock action on either REST or MCP", async () => {

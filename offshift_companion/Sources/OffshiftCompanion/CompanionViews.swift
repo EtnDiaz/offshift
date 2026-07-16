@@ -36,21 +36,28 @@ struct CompanionDashboardView: View {
             }
 
             HStack {
-                Button("Routine") { store.simulateRoutine() }
-                Button("Drift") { store.simulateDrift() }
-                Button("Protect") {
-                    store.simulateProtect()
-                    openWindow(id: "protection")
-                }
-                Button("Late-session fixture") {
-                    store.simulateLateSessionRisk()
-                    openWindow(id: "protection")
-                }
                 Spacer()
                 Button("Open protection") { openWindow(id: "protection") }
             }
 
-            Text("The companion samples only aggregate active/idle time locally. The buttons remain deterministic fixtures; the late-session fixture combines quiet hours, repeated snoozes, and a configured early start without inferring fatigue.")
+            #if DEBUG
+            GroupBox("Developer fixtures") {
+                HStack {
+                    Button("Routine") { store.simulateRoutine() }
+                    Button("Drift") { store.simulateDrift() }
+                    Button("Protect") {
+                        store.simulateProtect()
+                        openWindow(id: "protection")
+                    }
+                    Button("Late-session fixture") {
+                        store.simulateLateSessionRisk()
+                        openWindow(id: "protection")
+                    }
+                }
+            }
+            #endif
+
+            Text("The companion samples only aggregate active/idle time locally. It never inspects code, prompts, terminal output, or screen content.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

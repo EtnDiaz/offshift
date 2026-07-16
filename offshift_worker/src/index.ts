@@ -7,11 +7,17 @@ const MIN_START_IN_MINUTES = 0;
 const MAX_START_IN_MINUTES = 480;
 const MIN_SNOOZE_MINUTES = 5;
 const MAX_SNOOZE_MINUTES = 60;
+const MIN_BREAK_DURATION_MINUTES = 1;
+const MAX_BREAK_DURATION_MINUTES = 30;
 const MCP_PROTOCOL_VERSION = "2026-01-26";
-const MCP_SERVER_VERSION = "0.2.0";
-const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v1.html";
+const MCP_SERVER_VERSION = "0.4.0";
+const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v3.html";
+const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
+const ALLOWED_SCENE_ID = "wind-down";
+const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
 
 const DATA_TOOL_META = { ui: { visibility: ["model"] } };
+const INTERACTIVE_TOOL_META = { ui: { visibility: ["app"] } };
 const MUTATION_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: false,
@@ -25,50 +31,33 @@ const READ_ANNOTATIONS = {
   idempotentHint: true,
 };
 
-const OFFSHIFT_WIDGET_HTML = `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offshift</title></head>
-  <body>
-    <main aria-live="polite">
-      <h1>Offshift</h1>
-      <p id="summary">Loading the latest safe focus snapshot…</p>
-      <p id="privacy">Offshift uses only aggregate local timing. It cannot read code, prompts, terminal output, or screen content.</p>
-    </main>
-    <script type="module">
-      const summary = document.querySelector("#summary");
-      let requestId = 0;
-      const pending = new Map();
-      const send = (message) => window.parent.postMessage(message, "*");
-      const request = (method, params) => new Promise((resolve, reject) => {
-        const id = ++requestId;
-        pending.set(id, { resolve, reject });
-        send({ jsonrpc: "2.0", id, method, params });
-      });
-      const render = (result) => {
-        const data = result && result.structuredContent;
-        const focus = data && data.focusSnapshot;
-        const behavior = data && data.behaviorSnapshot;
-        if (!focus || !behavior) return;
-        summary.textContent = behavior.explanation + " Suggested break: " + focus.suggestedAction + ".";
-      };
-      window.addEventListener("message", (event) => {
-        if (event.source !== window.parent) return;
-        const message = event.data;
-        if (!message || message.jsonrpc !== "2.0") return;
-        if (typeof message.id === "number" && pending.has(message.id)) {
-          const entry = pending.get(message.id);
-          pending.delete(message.id);
-          if (message.error) entry.reject(message.error); else entry.resolve(message.result);
-          return;
-        }
-        if (message.method === "ui/notifications/tool-result") render(message.params);
-      }, { passive: true });
-      request("ui/initialize", { appInfo: { name: "offshift-worker", version: "${MCP_SERVER_VERSION}" }, appCapabilities: {}, protocolVersion: "${MCP_PROTOCOL_VERSION}" })
-        .then(() => send({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }))
-        .catch(() => { summary.textContent = "Offshift could not initialize the host bridge."; });
-    </script>
-  </body>
-</html>`;
+interface AssetBinding {
+  fetch(request: Request): Promise<Response>;
+}
+
+interface WorkerEnvironment {
+  ASSETS?: AssetBinding;
+}
+
+interface DashboardPlan {
+  id: string;
+  status: "suggested" | "scheduled" | "snoozed" | "on-call";
+  durationMinutes: number;
+  sceneId: typeof ALLOWED_SCENE_ID;
+  startsAt: string;
+  endsAt: string;
+  message: string;
+}
+
+interface DashboardState {
+  currentPlan: DashboardPlan | null;
+  idempotencyResults: Map<string, DashboardPlan>;
+  nextPlanNumber: number;
+}
+
+function widgetHtml(assetOrigin: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body><div id="offshift-root"></div><script type="module" src="${assetOrigin}/offshift.js"></script></body></html>`;
+}
 
 const MCP_TOOLS = [
   {
@@ -76,19 +65,19 @@ const MCP_TOOLS = [
     title: "Get focus snapshot",
     description: "Use this when the user asks about their current focus session or wants a safe, aggregate break suggestion.",
     inputSchema: optionalUserInputSchema(),
-    outputSchema: { type: "object", required: ["snapshot"], properties: { snapshot: focusSnapshotSchema() } },
+    outputSchema: { type: "object", required: ["snapshot"], properties: { snapshot: dashboardSnapshotSchema() } },
     annotations: READ_ANNOTATIONS,
     _meta: DATA_TOOL_META,
   },
   {
-    name: "get_behavior_policy_snapshot",
-    title: "Get explainable work-pattern policy and snapshot",
-    description: "Use this when the user asks why Offshift would suggest a break or what privacy and local-action boundaries apply.",
+    name: "get_work_pattern_snapshot",
+    title: "Get explainable work-pattern snapshot",
+    description: "Use this when the user asks why Offshift suggested a break or whether a local protection rule is eligible. It returns only explainable aggregate categories, never code or screen content.",
     inputSchema: optionalUserInputSchema(),
     outputSchema: {
       type: "object",
-      required: ["policy", "snapshot"],
-      properties: { policy: { type: "object" }, snapshot: behaviorSnapshotSchema() },
+      required: ["behaviour"],
+      properties: { behaviour: dashboardBehaviourSchema() },
     },
     annotations: READ_ANNOTATIONS,
     _meta: DATA_TOOL_META,
@@ -99,50 +88,82 @@ const MCP_TOOLS = [
     description: "Use this when the user wants to review an allowlisted break without changing their schedule.",
     inputSchema: {
       type: "object",
-      required: ["action"],
+      required: [],
       additionalProperties: false,
-      properties: { action: { type: "string", enum: BREAK_ACTIONS } },
+      properties: {
+        durationMinutes: { type: "integer", minimum: MIN_BREAK_DURATION_MINUTES, maximum: MAX_BREAK_DURATION_MINUTES },
+        sceneId: { type: "string", enum: [ALLOWED_SCENE_ID] },
+      },
     },
-    outputSchema: { type: "object", required: ["plan"], properties: { plan: breakPlanSchema() } },
+    outputSchema: dashboardOutputSchema(),
     annotations: READ_ANNOTATIONS,
     _meta: DATA_TOOL_META,
   },
   {
     name: "schedule_break",
     title: "Schedule a break",
-    description: "Use this only when the user explicitly chooses an allowlisted break action and a bounded start time.",
+    description: "Use this only when the user explicitly chooses a 1–30 minute Offshift break and the allowlisted wind-down scene.",
     inputSchema: {
       type: "object",
-      required: ["action", "startInMinutes", "idempotencyKey"],
+      required: ["idempotencyKey"],
       additionalProperties: false,
       properties: {
-        action: { type: "string", enum: BREAK_ACTIONS },
-        userId: { type: "string", minLength: 1, maxLength: MAX_USER_ID_LENGTH },
-        startInMinutes: { type: "integer", minimum: MIN_START_IN_MINUTES, maximum: MAX_START_IN_MINUTES },
+        durationMinutes: { type: "integer", minimum: MIN_BREAK_DURATION_MINUTES, maximum: MAX_BREAK_DURATION_MINUTES },
+        sceneId: { type: "string", enum: [ALLOWED_SCENE_ID] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
       },
     },
-    outputSchema: { type: "object", required: ["plan"], properties: { plan: breakPlanSchema() } },
+    outputSchema: dashboardOutputSchema(),
     annotations: MUTATION_ANNOTATIONS,
-    _meta: DATA_TOOL_META,
+    _meta: INTERACTIVE_TOOL_META,
+  },
+  {
+    name: "resume_reminders",
+    title: "Resume reminders",
+    description: "Use this only when the user explicitly ends their on-call override and resumes normal Offshift reminders.",
+    inputSchema: {
+      type: "object",
+      required: ["idempotencyKey"],
+      additionalProperties: false,
+      properties: { idempotencyKey: { type: "string", minLength: 8, maxLength: 128 } },
+    },
+    outputSchema: dashboardOutputSchema(),
+    annotations: MUTATION_ANNOTATIONS,
+    _meta: INTERACTIVE_TOOL_META,
   },
   {
     name: "snooze_break",
     title: "Snooze a break",
-    description: "Use this only when the user explicitly postpones an existing Offshift break by 5–60 minutes.",
+    description: "Use this only when the user explicitly postpones their current Offshift break by 5–15 minutes.",
     inputSchema: {
       type: "object",
-      required: ["planId", "minutes", "idempotencyKey"],
+      required: ["minutes", "idempotencyKey"],
       additionalProperties: false,
       properties: {
-        planId: { type: "string", pattern: "^break-\\d{4}$" },
-        minutes: { type: "integer", minimum: MIN_SNOOZE_MINUTES, maximum: MAX_SNOOZE_MINUTES },
+        minutes: { type: "integer", minimum: MIN_SNOOZE_MINUTES, maximum: 15 },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
       },
     },
-    outputSchema: { type: "object", required: ["plan"], properties: { plan: breakPlanSchema() } },
+    outputSchema: dashboardOutputSchema(),
     annotations: MUTATION_ANNOTATIONS,
-    _meta: DATA_TOOL_META,
+    _meta: INTERACTIVE_TOOL_META,
+  },
+  {
+    name: "set_on_call_override",
+    title: "Set an on-call override",
+    description: "Use this when the user explicitly needs a bounded 15–120 minute on-call period before Offshift resumes its normal reminder cadence.",
+    inputSchema: {
+      type: "object",
+      required: ["idempotencyKey"],
+      additionalProperties: false,
+      properties: {
+        minutes: { type: "integer", minimum: 15, maximum: 120 },
+        idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
+      },
+    },
+    outputSchema: dashboardOutputSchema(),
+    annotations: MUTATION_ANNOTATIONS,
+    _meta: INTERACTIVE_TOOL_META,
   },
   {
     name: "render_offshift_dashboard",
@@ -151,11 +172,12 @@ const MCP_TOOLS = [
     inputSchema: optionalUserInputSchema(),
     outputSchema: {
       type: "object",
-      required: ["focusSnapshot", "behaviorSnapshot", "suggestedPlan"],
+      required: ["snapshot", "behaviour", "plan", "allowedSceneIds"],
       properties: {
-        focusSnapshot: focusSnapshotSchema(),
-        behaviorSnapshot: behaviorSnapshotSchema(),
-        suggestedPlan: breakPlanSchema(),
+        snapshot: dashboardSnapshotSchema(),
+        behaviour: dashboardBehaviourSchema(),
+        plan: dashboardPlanSchema(),
+        allowedSceneIds: { type: "array", items: { type: "string", enum: [ALLOWED_SCENE_ID] } },
       },
     },
     annotations: READ_ANNOTATIONS,
@@ -168,13 +190,14 @@ const MCP_TOOLS = [
   },
 ] as const;
 
-export function createWorker(store: DemoStore = createDemoStore()): WorkerHandler {
+export function createWorker(store: DemoStore = createDemoStore(), widgetAssetOrigin = WIDGET_ASSET_ORIGIN): WorkerHandler {
+  const dashboardState: DashboardState = { currentPlan: null, idempotencyResults: new Map(), nextPlanNumber: 1 };
   return {
-    async fetch(request): Promise<Response> {
+    async fetch(request, env): Promise<Response> {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 
       try {
-        return await route(request, store);
+        return await route(request, store, dashboardState, widgetAssetOrigin, env as WorkerEnvironment);
       } catch (error) {
         if (error instanceof ApiError) return json({ error: error.message }, error.status);
         return json({ error: "Internal server error" }, 500);
@@ -186,8 +209,18 @@ export function createWorker(store: DemoStore = createDemoStore()): WorkerHandle
 const worker = createWorker();
 export default worker;
 
-async function route(request: Request, store: DemoStore): Promise<Response> {
+async function route(
+  request: Request,
+  store: DemoStore,
+  dashboardState: DashboardState,
+  widgetAssetOrigin: string,
+  env: WorkerEnvironment,
+): Promise<Response> {
   const url = new URL(request.url);
+
+  if (request.method === "GET" && /^\/offshift\.(js|css)$/.test(url.pathname) && env.ASSETS) {
+    return assetResponse(await env.ASSETS.fetch(request));
+  }
 
   if (request.method === "GET" && url.pathname === "/health") {
     return json({ status: "ok", service: "offshift-demo-api", mcpPath: "/mcp", widgetUri: OFFSHIFT_WIDGET_URI });
@@ -195,7 +228,7 @@ async function route(request: Request, store: DemoStore): Promise<Response> {
 
   if (url.pathname === "/mcp") {
     if (request.method !== "POST") throw new ApiError(405, "MCP requests must use POST");
-    return handleMcpRequest(request, store);
+    return handleMcpRequest(request, store, dashboardState, widgetAssetOrigin);
   }
 
   if (request.method === "GET" && url.pathname === "/v1/focus/snapshot") {
@@ -236,7 +269,12 @@ async function route(request: Request, store: DemoStore): Promise<Response> {
   throw new ApiError(404, "Route not found");
 }
 
-async function handleMcpRequest(request: Request, store: DemoStore): Promise<Response> {
+async function handleMcpRequest(
+  request: Request,
+  store: DemoStore,
+  dashboardState: DashboardState,
+  widgetAssetOrigin: string,
+): Promise<Response> {
   const message = await readJson(request);
   if (message.jsonrpc !== "2.0" || typeof message.method !== "string") {
     return mcpError(null, -32600, "Invalid JSON-RPC request");
@@ -246,7 +284,7 @@ async function handleMcpRequest(request: Request, store: DemoStore): Promise<Res
   if (message.method === "notifications/initialized") return new Response(null, { status: 202, headers: corsHeaders() });
 
   try {
-    const result = handleMcpMethod(message.method, recordOrEmpty(message.params), store);
+    const result = handleMcpMethod(message.method, recordOrEmpty(message.params), store, dashboardState, widgetAssetOrigin);
     return mcpResult(id, result);
   } catch (error) {
     if (error instanceof ApiError) return mcpError(id, -32602, error.message);
@@ -255,20 +293,26 @@ async function handleMcpRequest(request: Request, store: DemoStore): Promise<Res
   }
 }
 
-function handleMcpMethod(method: string, params: Record<string, unknown>, store: DemoStore): unknown {
+function handleMcpMethod(
+  method: string,
+  params: Record<string, unknown>,
+  store: DemoStore,
+  dashboardState: DashboardState,
+  widgetAssetOrigin: string,
+): unknown {
   if (method === "initialize") {
     return {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false }, resources: { listChanged: false } },
       serverInfo: { name: "offshift-worker", version: MCP_SERVER_VERSION },
-      instructions: "Offshift provides safe focus and break planning. Use only aggregate local timing; never infer health, read content, or request remote device actions. Schedule and snooze only after explicit user intent.",
+      instructions: "Offshift provides safe focus and break planning. Use only aggregate local timing; never infer health, read content, or request remote device actions. The model may explain or preview a plan; only an explicit dashboard click can schedule, snooze, set an on-call override, or resume reminders. The Worker cannot lock a device or run a smart-home scene.",
     };
   }
   if (method === "ping") return {};
   if (method === "tools/list") return { tools: MCP_TOOLS };
   if (method === "resources/list") {
     return {
-      resources: [{ uri: OFFSHIFT_WIDGET_URI, name: "Offshift dashboard", mimeType: "text/html;profile=mcp-app", description: "A compact bridge-first Offshift summary resource." }],
+      resources: [{ uri: OFFSHIFT_WIDGET_URI, name: "Offshift dashboard", mimeType: "text/html;profile=mcp-app", description: "The Offshift React dashboard, connected through the MCP Apps bridge." }],
     };
   }
   if (method === "resources/read") {
@@ -277,64 +321,67 @@ function handleMcpMethod(method: string, params: Record<string, unknown>, store:
       contents: [{
         uri: OFFSHIFT_WIDGET_URI,
         mimeType: "text/html;profile=mcp-app",
-        text: OFFSHIFT_WIDGET_HTML,
+        text: widgetHtml(widgetAssetOrigin),
         _meta: {
           ui: {
             prefersBorder: true,
-            csp: { connectDomains: [], resourceDomains: [] },
+            csp: { connectDomains: [], resourceDomains: [widgetAssetOrigin] },
           },
-          "openai/widgetDescription": "A safe Offshift focus summary. It has no controls for devices, locks, webhooks, or external commands.",
+          "openai/widgetDescription": "A safe Offshift dashboard. Its buttons prepare a reset, snooze, set a bounded on-call override, or resume reminders only; it has no controls for devices, locks, webhooks, or external commands.",
         },
       }],
     };
   }
-  if (method === "tools/call") return callMcpTool(params, store);
+  if (method === "tools/call") return callMcpTool(params, store, dashboardState);
   throw new McpMethodError(-32601, `MCP method not found: ${method}`);
 }
 
-function callMcpTool(params: Record<string, unknown>, store: DemoStore): unknown {
+function callMcpTool(params: Record<string, unknown>, store: DemoStore, dashboardState: DashboardState): unknown {
   if (typeof params.name !== "string") throw new ApiError(400, "MCP tool name must be a string");
   const args = recordOrEmpty(params.arguments);
 
   if (params.name === "get_focus_snapshot") {
-    const snapshot = modelSafeFocusSnapshot(store.getFocusSnapshot(readUserId(args.userId)));
+    const snapshot = dashboardData(store, dashboardState, readUserId(args.userId)).snapshot;
     return toolResult({ snapshot }, "Here is the aggregate focus snapshot. It does not contain app, screen, or source-code content.");
   }
-  if (params.name === "get_behavior_policy_snapshot") {
-    const userId = readUserId(args.userId);
-    return toolResult(
-      { policy: store.getBehaviorPolicy(), snapshot: store.getBehaviorSnapshot(userId) },
-      "Here is the explainable shadow-mode policy and its aggregate work-pattern snapshot.",
-    );
+  if (params.name === "get_work_pattern_snapshot") {
+    const behaviour = dashboardData(store, dashboardState, readUserId(args.userId)).behaviour;
+    return toolResult({ behaviour }, "Here is the explainable shadow-mode work-pattern snapshot. The Worker cannot perform a remote action.");
   }
   if (params.name === "preview_break_plan") {
-    const plan = store.preview(readAction(args.action));
-    return toolResult({ plan }, `Previewing the allowlisted ${plan.action} break. No schedule changed.`);
+    const plan = previewDashboardPlan(readDuration(args.durationMinutes), readSceneId(args.sceneId));
+    return dashboardToolResult(store, dashboardState, plan, "Previewing the allowlisted wind-down plan. No schedule changed.");
   }
   if (params.name === "schedule_break") {
-    const plan = store.schedule({
-      action: readAction(args.action),
-      userId: readUserId(args.userId),
-      startInMinutes: readBoundedInteger(args.startInMinutes, "startInMinutes", MIN_START_IN_MINUTES, MAX_START_IN_MINUTES),
-    }, `schedule:${readIdempotencyKey(args.idempotencyKey, true)}`);
-    return toolResult({ plan }, `Scheduled the allowlisted ${plan.action} break. No device action is sent from this Worker.`);
+    const key = `schedule:${readIdempotencyKey(args.idempotencyKey, true)}`;
+    const previous = dashboardState.idempotencyResults.get(key);
+    const plan = previous ?? scheduledDashboardPlan(dashboardState, readDuration(args.durationMinutes), readSceneId(args.sceneId));
+    dashboardState.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, dashboardState, plan, "A five-minute reset is prepared. Open the local companion to choose any local reminder, scene, or lock action.");
   }
   if (params.name === "snooze_break") {
-    const planId = readPlanId(args.planId);
-    const plan = store.snooze(
-      planId,
-      readBoundedInteger(args.minutes, "minutes", MIN_SNOOZE_MINUTES, MAX_SNOOZE_MINUTES),
-      `snooze:${readIdempotencyKey(args.idempotencyKey, true)}`,
-    );
-    if (!plan) throw new ApiError(409, "Break cannot be snoozed; it is missing or reached the snooze limit");
-    return toolResult({ plan }, `Snoozed the break for a bounded interval. No remote action was taken.`);
+    const key = `snooze:${readIdempotencyKey(args.idempotencyKey, true)}`;
+    const previous = dashboardState.idempotencyResults.get(key);
+    const plan = previous ?? snoozedDashboardPlan(dashboardState, readBoundedInteger(args.minutes, "minutes", MIN_SNOOZE_MINUTES, 15));
+    dashboardState.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, dashboardState, plan, "Break reminder snoozed for a bounded interval. No remote action was taken.");
+  }
+  if (params.name === "set_on_call_override") {
+    const key = `on-call:${readIdempotencyKey(args.idempotencyKey, true)}`;
+    const previous = dashboardState.idempotencyResults.get(key);
+    const plan = previous ?? onCallDashboardPlan(dashboardState, readBoundedInteger(args.minutes, "minutes", 15, 120));
+    dashboardState.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, dashboardState, plan, "On-call override is active for a bounded period. No remote action was taken.");
+  }
+  if (params.name === "resume_reminders") {
+    const key = `resume:${readIdempotencyKey(args.idempotencyKey, true)}`;
+    const previous = dashboardState.idempotencyResults.get(key);
+    const plan = previous ?? resumedDashboardPlan(dashboardState);
+    dashboardState.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, dashboardState, plan, "Reminders are back on. No remote action was taken.");
   }
   if (params.name === "render_offshift_dashboard") {
-    const userId = readUserId(args.userId);
-    const focusSnapshot = modelSafeFocusSnapshot(store.getFocusSnapshot(userId));
-    const behaviorSnapshot = store.getBehaviorSnapshot(userId);
-    const suggestedPlan = store.preview(focusSnapshot.suggestedAction);
-    return toolResult({ focusSnapshot, behaviorSnapshot, suggestedPlan }, "Showing the Offshift dashboard with its local-only safety boundary.");
+    return dashboardToolResult(store, dashboardState, dashboardState.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID), "Showing the Offshift dashboard with its local-only safety boundary.", readUserId(args.userId));
   }
   throw new McpMethodError(-32602, `Unknown Offshift tool: ${params.name}`);
 }
@@ -343,14 +390,78 @@ function toolResult(structuredContent: unknown, text: string): Record<string, un
   return { structuredContent, content: [{ type: "text", text }] };
 }
 
-function modelSafeFocusSnapshot(snapshot: ReturnType<DemoStore["getFocusSnapshot"]>) {
+function dashboardToolResult(store: DemoStore, dashboardState: DashboardState, plan: DashboardPlan, text: string, userId = DEFAULT_USER_ID): Record<string, unknown> {
+  return toolResult(dashboardData(store, dashboardState, userId, plan), text);
+}
+
+function dashboardData(store: DemoStore, dashboardState: DashboardState, userId: string, plan = dashboardState.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID)) {
+  const focus = store.getFocusSnapshot(userId);
+  const behavior = store.getBehaviorSnapshot(userId);
   return {
-    userId: snapshot.userId,
-    activeMinutes: snapshot.activeMinutes,
-    suggestedAction: snapshot.suggestedAction,
-    generatedAt: snapshot.generatedAt,
-    privacyNote: "Aggregate demo timing only. Offshift does not inspect source code, prompts, terminal output, filenames, or screen content.",
+    snapshot: {
+      activeAppCategory: "coding",
+      focusMinutes: focus.activeMinutes,
+      thresholdMinutes: 50,
+      suggestedBreakMinutes: 5,
+      privacyNote: "Demo data only. Offshift does not inspect source code, prompts, terminal output, filenames, or screen content.",
+    },
+    behaviour: {
+      level: behavior.band,
+      reasons: behavior.contributingCategories,
+      shadowMode: true,
+      lockScreenRule: "not-configured",
+    },
+    plan,
+    allowedSceneIds: [ALLOWED_SCENE_ID],
   };
+}
+
+function dashboardPlan(status: DashboardPlan["status"], durationMinutes: number, startsAt: Date, id = "preview"): DashboardPlan {
+  return {
+    id,
+    status,
+    durationMinutes,
+    sceneId: ALLOWED_SCENE_ID,
+    startsAt: startsAt.toISOString(),
+    endsAt: new Date(startsAt.getTime() + durationMinutes * 60_000).toISOString(),
+    message: status === "snoozed"
+      ? "Your break was deliberately postponed. Offshift will ask again at the new time."
+      : status === "on-call"
+        ? "On-call override is active for this bounded period. Offshift will return to its usual reminders afterwards."
+        : "Your break is ready when you are. The local companion will require a direct confirmation before any scene runs.",
+  };
+}
+
+function previewDashboardPlan(durationMinutes: number, sceneId: string): DashboardPlan {
+  if (sceneId !== ALLOWED_SCENE_ID) throw new ApiError(400, "sceneId must be the allowlisted wind-down scene");
+  return dashboardPlan("suggested", durationMinutes, DASHBOARD_NOW);
+}
+
+function scheduledDashboardPlan(state: DashboardState, durationMinutes: number, sceneId: string): DashboardPlan {
+  const plan = { ...previewDashboardPlan(durationMinutes, sceneId), id: `break-${state.nextPlanNumber++}`, status: "scheduled" as const };
+  state.currentPlan = plan;
+  return plan;
+}
+
+function snoozedDashboardPlan(state: DashboardState, minutes: number): DashboardPlan {
+  const current = state.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID);
+  const plan = dashboardPlan("snoozed", current.durationMinutes, new Date(DASHBOARD_NOW.getTime() + minutes * 60_000), current.id);
+  state.currentPlan = plan;
+  return plan;
+}
+
+function onCallDashboardPlan(state: DashboardState, minutes: number): DashboardPlan {
+  const current = state.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID);
+  const plan = dashboardPlan("on-call", current.durationMinutes, new Date(DASHBOARD_NOW.getTime() + minutes * 60_000), current.id);
+  state.currentPlan = plan;
+  return plan;
+}
+
+function resumedDashboardPlan(state: DashboardState): DashboardPlan {
+  const current = state.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID);
+  const plan = dashboardPlan("suggested", current.durationMinutes, DASHBOARD_NOW, current.id);
+  state.currentPlan = plan;
+  return plan;
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown>> {
@@ -402,6 +513,17 @@ function readBoundedInteger(value: unknown, name: string, minimum: number, maxim
   return value as number;
 }
 
+function readDuration(value: unknown): number {
+  if (value === undefined || value === null) return 5;
+  return readBoundedInteger(value, "durationMinutes", MIN_BREAK_DURATION_MINUTES, MAX_BREAK_DURATION_MINUTES);
+}
+
+function readSceneId(value: unknown): string {
+  if (value === undefined || value === null) return ALLOWED_SCENE_ID;
+  if (value === ALLOWED_SCENE_ID) return value;
+  throw new ApiError(400, "sceneId must be the allowlisted wind-down scene");
+}
+
 function optionalUserInputSchema(): Record<string, unknown> {
   return {
     type: "object",
@@ -433,6 +555,62 @@ function behaviorSnapshotSchema(): Record<string, unknown> {
   };
 }
 
+function dashboardSnapshotSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["activeAppCategory", "focusMinutes", "thresholdMinutes", "suggestedBreakMinutes", "privacyNote"],
+    properties: {
+      activeAppCategory: { const: "coding" },
+      focusMinutes: { type: "integer", minimum: 1 },
+      thresholdMinutes: { type: "integer", minimum: 1 },
+      suggestedBreakMinutes: { type: "integer", minimum: 1 },
+      privacyNote: { type: "string" },
+    },
+  };
+}
+
+function dashboardBehaviourSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["level", "reasons", "shadowMode", "lockScreenRule"],
+    properties: {
+      level: { type: "string", enum: ["routine", "drift", "protect"] },
+      reasons: { type: "array", items: { type: "string" } },
+      shadowMode: { const: true },
+      lockScreenRule: { const: "not-configured" },
+    },
+  };
+}
+
+function dashboardPlanSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["id", "status", "durationMinutes", "sceneId", "startsAt", "endsAt", "message"],
+    properties: {
+      id: { type: "string" },
+      status: { type: "string", enum: ["suggested", "scheduled", "snoozed", "on-call"] },
+      durationMinutes: { type: "integer", minimum: MIN_BREAK_DURATION_MINUTES, maximum: MAX_BREAK_DURATION_MINUTES },
+      sceneId: { const: ALLOWED_SCENE_ID },
+      startsAt: { type: "string", format: "date-time" },
+      endsAt: { type: "string", format: "date-time" },
+      message: { type: "string" },
+    },
+  };
+}
+
+function dashboardOutputSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    required: ["snapshot", "behaviour", "plan", "allowedSceneIds"],
+    properties: {
+      snapshot: dashboardSnapshotSchema(),
+      behaviour: dashboardBehaviourSchema(),
+      plan: dashboardPlanSchema(),
+      allowedSceneIds: { type: "array", items: { const: ALLOWED_SCENE_ID } },
+    },
+  };
+}
+
 function breakPlanSchema(): Record<string, unknown> {
   return {
     type: "object",
@@ -460,6 +638,13 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...corsHeaders() },
   });
+}
+
+function assetResponse(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", "*");
+  headers.set("cross-origin-resource-policy", "cross-origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function mcpResult(id: string | number | null, result: unknown): Response {

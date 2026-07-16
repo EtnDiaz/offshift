@@ -3,5 +3,10 @@
   "name": "offshift-demo-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-16",
-  "workers_dev": true
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  }
 }

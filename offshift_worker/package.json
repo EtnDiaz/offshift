@@ -5,8 +5,9 @@
   "description": "Standalone Offshift Cloudflare Worker demo API.",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "build:widget": "node ./scripts/sync-widget.mjs",
+    "dev": "npm run build:widget && wrangler dev",
+    "deploy": "npm run build:widget && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "rm -rf .test-dist && tsc --noEmit false --outDir .test-dist && node --test test/*.test.mjs"
   },

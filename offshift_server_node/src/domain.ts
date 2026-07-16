@@ -173,3 +173,18 @@ export function setOnCallOverride(
   state.idempotencyResults.set(input.idempotencyKey, plan);
   return plan;
 }
+
+export function resumeReminders(
+  state: DemoState,
+  input: { idempotencyKey: string },
+  now = new Date(),
+): BreakPlan {
+  const previous = state.idempotencyResults.get(input.idempotencyKey);
+  if (previous) return previous;
+
+  const current = state.currentPlan ?? previewBreakPlan(5, "wind-down", now);
+  const plan = buildPlan(current.id, "suggested", current.durationMinutes, current.sceneId, now);
+  state.currentPlan = plan;
+  state.idempotencyResults.set(input.idempotencyKey, plan);
+  return plan;
+}

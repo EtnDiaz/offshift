@@ -2,6 +2,7 @@ export const OFFSHIFT_TOOLS = {
   scheduleBreak: "schedule_break",
   snoozeBreak: "snooze_break",
   onCallOverride: "set_on_call_override",
+  resumeReminders: "resume_reminders",
 } as const;
 
 export interface FocusSnapshot {
@@ -36,7 +37,7 @@ export interface OffshiftWidgetData {
   allowedSceneIds: readonly string[];
 }
 
-export type ActionName = "schedule" | "snooze" | "onCall";
+export type ActionName = "schedule" | "snooze" | "onCall" | "resume";
 export type ActionStatus = "idle" | "working" | "success" | "error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,6 +66,7 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
     typeof snapshot.privacyNote !== "string" ||
     (behaviour.level !== "routine" && behaviour.level !== "drift" && behaviour.level !== "protect") ||
     !Array.isArray(behaviour.reasons) ||
+    behaviour.reasons.length === 0 ||
     !behaviour.reasons.every((reason) => typeof reason === "string") ||
     typeof behaviour.shadowMode !== "boolean" ||
     (behaviour.lockScreenRule !== "not-configured" && behaviour.lockScreenRule !== "local-only") ||

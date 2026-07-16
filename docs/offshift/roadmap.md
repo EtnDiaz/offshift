@@ -8,13 +8,13 @@ The product calls this a **work-pattern risk**, never a health score. All detect
 
 ## What is already built
 
-The first local slice is complete: an Apps SDK widget, local Node MCP server, bounded/idempotent schedule and snooze tools, a tested Cloudflare Worker demo API, and a macOS companion. The companion observes only aggregate active/idle duration locally, has a protection window, supports a disabled-by-default local Lock Screen rule, and can run one locally confirmed Home Assistant `wind-down` scene. It still needs public Apps SDK runtime validation and pilot evidence before the protection rule should be recommended.
+The first local slice is complete: an Apps SDK widget, local Node MCP server, reversible widget-only schedule/snooze/on-call/resume controls, a tested Cloudflare Worker demo API, and a macOS companion. The dashboard is intentionally honest: it prepares a reset but cannot itself run a reminder, scene, or lock. The companion observes only aggregate active/idle duration locally, has a protection window, supports a disabled-by-default local Lock Screen rule, and can run one locally confirmed Home Assistant `wind-down` scene. It still needs public Apps SDK runtime validation and pilot evidence before the protection rule should be recommended.
 
 ## Sequenced milestones
 
 | Milestone | Build | Test / decision gate | Outcome |
 | --- | --- | --- | --- |
-| 1. Real App loop | Put the MCP endpoint behind HTTPS, bind the Worker persistence boundary, and test the widget in ChatGPT Developer Mode. | Run direct, indirect, and negative golden prompts; confirm tool selection, arguments, repeat-call idempotency, and rendering. | A real ChatGPT App can plan, start, and snooze a break. |
+| 1. Real App loop | Put the MCP endpoint behind HTTPS, bind the Worker persistence boundary, and test the widget in ChatGPT Developer Mode. | Run direct, indirect, and negative golden prompts; confirm tool selection, arguments, repeat-call idempotency, rendering, and recovery state. | A real ChatGPT App can explain and prepare a break; only the local companion may carry out local actions. |
 | 2. Shadow behaviour model | Build a local macOS collector that calculates a risk from coarse aggregates but shows no interruption yet. | Five developer participants use it for several work sessions; compare suggested events with a short self-report. | We learn whether the signals feel accurate enough to show. |
 | 3. Respectful intervention | Enable a local notification, then a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Measure acceptance, snooze, disable, and “unhelpful” events; test on-call override, instant disable, the pre-lock countdown, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
 | 4. One ambient action | Integrate exactly one user-owned, allowlisted Home Assistant `wind-down` scene. | Test a fixed request in a sandbox with revoked credentials, retry, offline, and explicit-confirmation cases. | The demo has a real-world action without unsafe open-ended control. |
@@ -46,7 +46,7 @@ The user must see the contributing categories, change thresholds, turn Offshift 
 | Feature | Priority | Why it earns its place | Proof before expansion |
 | --- | --- | --- | --- |
 | Explainable work-pattern heuristic | Must | It is the distinguishing value over a generic Pomodoro timer. | At least 3 of 5 pilot users say shown events were timely; fewer than one unhelpful interruption per two hours per user. |
-| Start / snooze / on-call override | Must | Preserves agency and produces feedback for tuning. | Every path works offline-safe locally and is auditable. |
+| Prepare / snooze / on-call / resume | Must | Preserves agency and produces feedback for tuning. | Every path is explicit, reversible, retry-safe, and auditable. |
 | macOS action-required overlay | Must after shadow pilot | ChatGPT cannot create a monitor-level interruption. | Participants choose a break more often than they immediately disable the feature. |
 | Local optional Lock Screen rule | Should after overlay validation | It is the strongest version of the promise, similar to Red Card's deliberate stop ritual. | Every pilot participant understands the exact rule, can cancel it, and reports no surprise locks. |
 | ChatGPT planner/dashboard | Must | Lets a developer inspect, explain, and modify the ritual conversationally. | Golden prompts pass in Developer Mode through a public HTTPS MCP endpoint. |

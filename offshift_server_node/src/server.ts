@@ -18,6 +18,7 @@ import {
   createDemoState,
   focusSnapshot,
   previewBreakPlan,
+  resumeReminders,
   scheduleBreak,
   setOnCallOverride,
   snoozeBreak,
@@ -27,7 +28,7 @@ import {
 const VERSION = "0.1.0";
 // Bump this URI whenever the widget markup, styles, or bridge behaviour changes.
 // ChatGPT caches resources by URI; the package build hash alone is not sufficient.
-const TEMPLATE_URI = "ui://widget/offshift-v3.html";
+const TEMPLATE_URI = "ui://widget/offshift-v4.html";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..", "..");
 const assetsDir = path.join(rootDir, "assets");
@@ -35,6 +36,9 @@ const port = Number(process.env.PORT ?? 8000);
 const widgetDomain = process.env.WIDGET_DOMAIN?.replace(/\/+$/, "");
 const demoState = createDemoState();
 const dataToolMeta = { ui: { visibility: ["model"] } };
+// A mutation may only be invoked from an explicit dashboard control. The model
+// can explain and preview a plan, but it cannot apply an override for a user.
+const interactiveToolMeta = { ui: { visibility: ["app"] } };
 
 function findAsset(prefix: string, extension: string): string {
   if (!fs.existsSync(assetsDir)) {
@@ -77,7 +81,7 @@ function toolResult(plan = demoState.currentPlan ?? previewBreakPlan(5, "wind-do
 function createOffshiftServer(): McpServer {
   const server = new McpServer(
     { name: "offshift", version: VERSION },
-    { instructions: "Use focus tools to explain the current session. Only schedule or snooze a break after the user explicitly asks. Offshift supports only allowlisted local scenes." },
+    { instructions: "Use focus tools to explain the current session and preview plans. Only the user may schedule, snooze, set an on-call override, or resume reminders through the Offshift dashboard. Offshift supports only allowlisted local scenes." },
   );
 
   registerAppResource(server, "Offshift dashboard", TEMPLATE_URI, {}, async () => ({
@@ -110,7 +114,7 @@ function createOffshiftServer(): McpServer {
     description: "Use this when the user asks why Offshift suggested a break or whether a local protection rule is eligible. It returns only explainable aggregate categories, never code or screen content.",
     inputSchema: {},
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
-    outputSchema: { behaviour: z.object({ level: z.enum(["routine", "drift", "protect"]), reasons: z.array(z.string()), shadowMode: z.boolean(), lockScreenRule: z.enum(["not-configured", "local-only"]) }) },
+    outputSchema: { behaviour: z.object({ level: z.enum(["routine", "drift", "protect"]), reasons: z.array(z.string()).min(1).max(3), shadowMode: z.boolean(), lockScreenRule: z.enum(["not-configured", "local-only"]) }) },
     _meta: dataToolMeta,
   }, async () => ({ structuredContent: { behaviour: workPatternSnapshot() }, content: [{ type: "text", text: "Offshift uses local, explainable aggregate signals only. It cannot remotely lock your device." }] }));
 
@@ -127,7 +131,7 @@ function createOffshiftServer(): McpServer {
     description: "Use this when the user explicitly chooses a 1–30 minute Offshift break and an allowlisted scene.",
     inputSchema: { ...planInput, idempotencyKey: z.string().min(8).max(128) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
-    _meta: dataToolMeta,
+    _meta: interactiveToolMeta,
   }, async ({ durationMinutes, sceneId, idempotencyKey }) => toolResult(scheduleBreak(demoState, { durationMinutes, sceneId, idempotencyKey })));
 
   registerAppTool(server, "snooze_break", {
@@ -135,7 +139,7 @@ function createOffshiftServer(): McpServer {
     description: "Use this when the user explicitly postpones their currently planned Offshift break by 5–15 minutes.",
     inputSchema: { minutes: z.number().int().min(5).max(15).default(5), idempotencyKey: z.string().min(8).max(128) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
-    _meta: dataToolMeta,
+    _meta: interactiveToolMeta,
   }, async ({ minutes, idempotencyKey }) => toolResult(snoozeBreak(demoState, { minutes, idempotencyKey })));
 
   registerAppTool(server, "set_on_call_override", {
@@ -143,8 +147,16 @@ function createOffshiftServer(): McpServer {
     description: "Use this when the user explicitly needs a bounded 15–120 minute on-call period before Offshift resumes its normal reminder cadence.",
     inputSchema: { minutes: z.number().int().min(15).max(120).default(60), idempotencyKey: z.string().min(8).max(128) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
-    _meta: dataToolMeta,
+    _meta: interactiveToolMeta,
   }, async ({ minutes, idempotencyKey }) => toolResult(setOnCallOverride(demoState, { minutes, idempotencyKey })));
+
+  registerAppTool(server, "resume_reminders", {
+    title: "Resume reminders",
+    description: "Use this only when the user explicitly ends their current on-call override and resumes normal Offshift reminders.",
+    inputSchema: { idempotencyKey: z.string().min(8).max(128) },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+    _meta: interactiveToolMeta,
+  }, async ({ idempotencyKey }) => toolResult(resumeReminders(demoState, { idempotencyKey })));
 
   registerAppTool(server, "render_offshift_dashboard", {
     title: "Show Offshift dashboard",

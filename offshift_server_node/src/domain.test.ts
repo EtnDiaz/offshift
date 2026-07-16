@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ALLOWED_SCENE_IDS, createDemoState, focusSnapshot, isAllowedSceneId, scheduleBreak, setOnCallOverride, snoozeBreak, workPatternSnapshot } from "./domain.js";
+import { ALLOWED_SCENE_IDS, createDemoState, focusSnapshot, isAllowedSceneId, resumeReminders, scheduleBreak, setOnCallOverride, snoozeBreak, workPatternSnapshot } from "./domain.js";
 
 test("the MCP contract exposes exactly one opaque local scene", () => {
   assert.deepEqual(ALLOWED_SCENE_IDS, ["wind-down"]);
@@ -64,5 +64,17 @@ test("on-call override is bounded and idempotent", () => {
 
   assert.equal(first.status, "on-call");
   assert.equal(first.startsAt, "2026-07-16T13:00:00.000Z");
+  assert.deepEqual(second, first);
+});
+
+test("resume reminders is an explicit, idempotent escape from on-call", () => {
+  const state = createDemoState();
+  const now = new Date("2026-07-16T12:00:00.000Z");
+  setOnCallOverride(state, { minutes: 60, idempotencyKey: "on-call-2" }, now);
+
+  const first = resumeReminders(state, { idempotencyKey: "resume-1" }, now);
+  const second = resumeReminders(state, { idempotencyKey: "resume-1" }, new Date("2026-07-16T13:00:00.000Z"));
+
+  assert.equal(first.status, "suggested");
   assert.deepEqual(second, first);
 });

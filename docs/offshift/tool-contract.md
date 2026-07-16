@@ -15,12 +15,13 @@
 | `schedule_break` | the user explicitly chooses a bounded break plan | duration 1–30, the sole `wind-down` id, idempotency key | scheduled plan and state | not read-only, non-destructive, closed world, idempotent per key |
 | `snooze_break` | the user explicitly postpones the existing plan | 5–15 minutes, idempotency key | updated plan and state | not read-only, non-destructive, closed world, idempotent per key |
 | `set_on_call_override` | the user explicitly needs a bounded incident/on-call exception | 15–120 minutes, idempotency key | bounded override plan and state | not read-only, non-destructive, closed world, idempotent per key |
+| `resume_reminders` | the user explicitly ends an on-call exception | idempotency key | suggested plan and state | not read-only, non-destructive, closed world, idempotent per key |
 
-No MCP tool can lock a device, end a Codex session, inspect source code, upload telemetry, invoke a webhook, or send a smart-home command. The sole `wind-down` scene is mapped to `scene.offshift_wind_down` and executed only by a locally configured macOS companion after its own confirmation dialog (ADR 0007). A macOS-only Lock Screen action is represented solely by a locally configured companion rule (ADR 0003).
+No MCP tool can lock a device, end a Codex session, inspect source code, upload telemetry, invoke a webhook, or send a smart-home command. The sole `wind-down` scene is mapped to `scene.offshift_wind_down` and executed only by a locally configured macOS companion after its own confirmation dialog (ADR 0007). A macOS-only Lock Screen action is represented solely by a locally configured companion rule (ADR 0003). The model may read and preview; all write tools are visible only to the widget and require a named user click (ADR 0009).
 
 ## Render tool
 
-`render_offshift_dashboard` returns the final snapshot, behaviour explanation, and plan and attaches the versioned `ui://widget/offshift-v3.html` resource. It is the only model-visible tool that mounts the widget. Component-initiated mutations use `tools/call` through the MCP Apps bridge.
+`render_offshift_dashboard` returns the final snapshot, behaviour explanation, and plan and attaches the versioned `ui://widget/offshift-v4.html` resource. It is the only model-visible tool that mounts the widget. Component-initiated mutations use `tools/call` through the MCP Apps bridge.
 
 ## Golden prompts
 
