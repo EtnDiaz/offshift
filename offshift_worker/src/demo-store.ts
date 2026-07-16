@@ -1,7 +1,58 @@
-import { BREAK_ACTIONS, type BreakAction, type BreakPlan, type BreakPreview, type DemoStore, type FocusSnapshot, type ScheduleInput } from "./types.js";
+import {
+  BREAK_ACTIONS,
+  type BehaviorPolicy,
+  type BehaviorSnapshot,
+  type BreakAction,
+  type BreakPlan,
+  type BreakPreview,
+  type DemoStore,
+  type FocusSnapshot,
+  type ScheduleInput,
+  type WorkPatternBand,
+} from "./types.js";
 
 const FIXED_SNAPSHOT_TIME = "2026-07-16T09:00:00.000Z";
 const MAX_SNOOZES = 3;
+
+const BEHAVIOR_POLICY: BehaviorPolicy = {
+  policyVersion: "2026-07-16",
+  mode: "shadow",
+  decisionOwner: "local-companion",
+  bands: [
+    {
+      band: "routine",
+      meaning: "The observed aggregate session is within the user's chosen rhythm.",
+      response: "Show the next optional break without interrupting the user.",
+    },
+    {
+      band: "drift",
+      meaning: "Long uninterrupted activity or quiet-hours context suggests a gentle check-in may help.",
+      response: "A local companion may offer a reversible break invitation after the user enables nudges.",
+    },
+    {
+      band: "protect",
+      meaning: "A locally configured, repeated pattern needs a clearer invitation to step away.",
+      response: "Only the local companion may show its cancellable protection flow; this Worker cannot lock or control a device.",
+    },
+  ],
+  allowedSignalCategories: [
+    "aggregate active-app timing",
+    "aggregate idle gaps",
+    "configured quiet-hours state",
+    "accepted, snoozed, or dismissed break events",
+    "optional boolean Codex-session-active state",
+  ],
+  excludedDataCategories: [
+    "source code, prompts, diffs, terminal output, or filenames",
+    "screen or browser content, screenshots, keystrokes, camera, or microphone",
+    "device credentials, arbitrary URLs, and smart-home commands",
+  ],
+  forbiddenRemoteActions: [
+    "remote lock commands",
+    "ending a Codex session or submitting code",
+    "arbitrary webhooks or device commands",
+  ],
+};
 
 const PREVIEWS: Record<BreakAction, BreakPreview> = {
   stretch: {
@@ -32,6 +83,7 @@ const PREVIEWS: Record<BreakAction, BreakPreview> = {
 
 export class InMemoryDemoStore implements DemoStore {
   private readonly plans = new Map<string, BreakPlan>();
+  private readonly idempotencyResults = new Map<string, BreakPlan>();
   private nextId = 1;
 
   constructor(private readonly now: () => Date = () => new Date()) {}
@@ -47,11 +99,38 @@ export class InMemoryDemoStore implements DemoStore {
     };
   }
 
+  getBehaviorPolicy(): BehaviorPolicy {
+    return BEHAVIOR_POLICY;
+  }
+
+  getBehaviorSnapshot(userId: string): BehaviorSnapshot {
+    const focus = this.getFocusSnapshot(userId);
+    const band = behaviorBandFor(focus.activeMinutes);
+    const contributingCategories = [
+      `${focus.activeMinutes} minutes of aggregate active-app time`,
+      "No raw app, screen, source-code, or prompt content is available to this Worker",
+    ];
+
+    return {
+      userId,
+      band,
+      mode: "shadow",
+      activeMinutes: focus.activeMinutes,
+      contributingCategories,
+      explanation: behaviorExplanation(band, focus.activeMinutes),
+      canTriggerRemoteAction: false,
+      generatedAt: FIXED_SNAPSHOT_TIME,
+    };
+  }
+
   preview(action: BreakAction): BreakPreview {
     return PREVIEWS[action];
   }
 
-  schedule({ action, userId, startInMinutes }: ScheduleInput): BreakPlan {
+  schedule({ action, userId, startInMinutes }: ScheduleInput, idempotencyKey?: string): BreakPlan {
+    const previous = idempotencyKey ? this.idempotencyResults.get(idempotencyKey) : undefined;
+    if (previous) return previous;
+
     const createdAt = this.now();
     const id = `break-${String(this.nextId++).padStart(4, "0")}`;
     const preview = this.preview(action);
@@ -65,10 +144,14 @@ export class InMemoryDemoStore implements DemoStore {
       snoozeCount: 0,
     };
     this.plans.set(id, plan);
+    if (idempotencyKey) this.idempotencyResults.set(idempotencyKey, plan);
     return plan;
   }
 
-  snooze(id: string, minutes: number): BreakPlan | undefined {
+  snooze(id: string, minutes: number, idempotencyKey?: string): BreakPlan | undefined {
+    const previous = idempotencyKey ? this.idempotencyResults.get(idempotencyKey) : undefined;
+    if (previous) return previous;
+
     const current = this.plans.get(id);
     if (!current || current.snoozeCount >= MAX_SNOOZES) return undefined;
 
@@ -79,6 +162,7 @@ export class InMemoryDemoStore implements DemoStore {
       snoozeCount: current.snoozeCount + 1,
     };
     this.plans.set(id, plan);
+    if (idempotencyKey) this.idempotencyResults.set(idempotencyKey, plan);
     return plan;
   }
 }
@@ -94,4 +178,20 @@ function stableHash(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+function behaviorBandFor(activeMinutes: number): WorkPatternBand {
+  if (activeMinutes >= 85) return "protect";
+  if (activeMinutes >= 60) return "drift";
+  return "routine";
+}
+
+function behaviorExplanation(band: WorkPatternBand, activeMinutes: number): string {
+  if (band === "routine") {
+    return `${activeMinutes} minutes of aggregate activity is within this demo policy's routine band. Offshift remains in shadow mode.`;
+  }
+  if (band === "drift") {
+    return `${activeMinutes} minutes of aggregate activity reached the drift band. A future local companion could offer a gentle, user-enabled nudge.`;
+  }
+  return `${activeMinutes} minutes of aggregate activity reached the protect band in this fixture. Only a local companion may offer a cancellable protection flow; this Worker takes no action.`;
 }

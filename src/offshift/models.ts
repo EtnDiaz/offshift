@@ -1,6 +1,7 @@
 export const OFFSHIFT_TOOLS = {
   scheduleBreak: "schedule_break",
   snoozeBreak: "snooze_break",
+  onCallOverride: "set_on_call_override",
 } as const;
 
 export interface FocusSnapshot {
@@ -13,7 +14,7 @@ export interface FocusSnapshot {
 
 export interface BreakPlan {
   id: string;
-  status: "suggested" | "scheduled" | "snoozed" | "started";
+  status: "suggested" | "scheduled" | "snoozed" | "started" | "on-call";
   durationMinutes: number;
   sceneId: "stretch-lights" | "wind-down";
   startsAt: string;
@@ -21,13 +22,21 @@ export interface BreakPlan {
   message: string;
 }
 
+export interface WorkPatternSnapshot {
+  level: "routine" | "drift" | "protect";
+  reasons: readonly string[];
+  shadowMode: boolean;
+  lockScreenRule: "not-configured" | "local-only";
+}
+
 export interface OffshiftWidgetData {
   snapshot: FocusSnapshot;
+  behaviour: WorkPatternSnapshot;
   plan: BreakPlan;
   allowedSceneIds: readonly string[];
 }
 
-export type ActionName = "schedule" | "snooze";
+export type ActionName = "schedule" | "snooze" | "onCall";
 export type ActionStatus = "idle" | "working" | "success" | "error";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,9 +52,10 @@ function isIsoString(value: unknown): value is string {
 }
 
 export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null {
-  if (!isRecord(value) || !isRecord(value.snapshot) || !isRecord(value.plan)) return null;
+  if (!isRecord(value) || !isRecord(value.snapshot) || !isRecord(value.behaviour) || !isRecord(value.plan)) return null;
 
   const snapshot = value.snapshot;
+  const behaviour = value.behaviour;
   const plan = value.plan;
   if (
     snapshot.activeAppCategory !== "coding" ||
@@ -53,13 +63,18 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
     !isPositiveInt(snapshot.thresholdMinutes) ||
     !isPositiveInt(snapshot.suggestedBreakMinutes) ||
     typeof snapshot.privacyNote !== "string" ||
+    (behaviour.level !== "routine" && behaviour.level !== "drift" && behaviour.level !== "protect") ||
+    !Array.isArray(behaviour.reasons) ||
+    !behaviour.reasons.every((reason) => typeof reason === "string") ||
+    typeof behaviour.shadowMode !== "boolean" ||
+    (behaviour.lockScreenRule !== "not-configured" && behaviour.lockScreenRule !== "local-only") ||
     typeof plan.id !== "string" ||
     !isPositiveInt(plan.durationMinutes) ||
     (plan.sceneId !== "stretch-lights" && plan.sceneId !== "wind-down") ||
     typeof plan.message !== "string" ||
     !isIsoString(plan.startsAt) ||
     !isIsoString(plan.endsAt) ||
-    (plan.status !== "suggested" && plan.status !== "scheduled" && plan.status !== "snoozed" && plan.status !== "started")
+    (plan.status !== "suggested" && plan.status !== "scheduled" && plan.status !== "snoozed" && plan.status !== "started" && plan.status !== "on-call")
   ) {
     return null;
   }
@@ -71,6 +86,12 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
       thresholdMinutes: snapshot.thresholdMinutes,
       suggestedBreakMinutes: snapshot.suggestedBreakMinutes,
       privacyNote: snapshot.privacyNote,
+    },
+    behaviour: {
+      level: behaviour.level,
+      reasons: behaviour.reasons,
+      shadowMode: behaviour.shadowMode,
+      lockScreenRule: behaviour.lockScreenRule,
     },
     plan: {
       id: plan.id,

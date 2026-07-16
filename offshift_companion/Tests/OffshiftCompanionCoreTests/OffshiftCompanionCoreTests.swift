@@ -1,0 +1,160 @@
+import XCTest
+@testable import OffshiftCompanionCore
+
+final class WorkPatternHeuristicTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    func testNoRecentActivityIsRoutineWithExplicitReason() {
+        let assessment = WorkPatternHeuristic().assess([], at: now)
+
+        XCTAssertEqual(assessment.state, .routine)
+        XCTAssertEqual(assessment.reasons, [.noRecentActivity])
+    }
+
+    func testContinuousActivityMovesThroughDriftToProtectDeterministically() {
+        let heuristic = WorkPatternHeuristic()
+        let drift = heuristic.assess([
+            ActiveAppInterval(startedAt: now.addingTimeInterval(-50 * 60), activeDuration: 50 * 60, appIdentifier: "app.a")
+        ], at: now)
+        let protect = heuristic.assess([
+            ActiveAppInterval(startedAt: now.addingTimeInterval(-95 * 60), activeDuration: 95 * 60, appIdentifier: "app.a")
+        ], at: now)
+
+        XCTAssertEqual(drift.state, .drift)
+        XCTAssertEqual(drift.reasons, [.sustainedContinuousActivity])
+        XCTAssertEqual(protect.state, .protect)
+        XCTAssertEqual(protect.reasons, [.protectContinuousActivity])
+    }
+
+    func testSubstantialBreakResetsContinuousActivity() {
+        let heuristic = WorkPatternHeuristic()
+        let assessment = heuristic.assess([
+            ActiveAppInterval(startedAt: now.addingTimeInterval(-70 * 60), activeDuration: 30 * 60, appIdentifier: "app.a"),
+            ActiveAppInterval(startedAt: now.addingTimeInterval(-30 * 60), activeDuration: 30 * 60, appIdentifier: "app.a")
+        ], at: now)
+
+        XCTAssertEqual(assessment.currentContinuousActiveDuration, 30 * 60)
+        XCTAssertEqual(assessment.state, .routine)
+        XCTAssertEqual(assessment.reasons, [.belowDriftThreshold])
+    }
+
+    func testIntervalsOutsideWindowAreIgnored() {
+        let assessment = WorkPatternHeuristic().assess([
+            ActiveAppInterval(startedAt: now.addingTimeInterval(-4 * 60 * 60), activeDuration: 90 * 60, appIdentifier: "app.a")
+        ], at: now)
+
+        XCTAssertEqual(assessment.state, .routine)
+        XCTAssertEqual(assessment.reasons, [.noRecentActivity])
+    }
+}
+
+final class InterventionControllerTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func protectAssessment() -> WorkPatternAssessment {
+        WorkPatternAssessment(
+            state: .protect,
+            totalActiveDuration: 95 * 60,
+            currentContinuousActiveDuration: 95 * 60,
+            appSwitchCount: 0,
+            reasons: [.protectContinuousActivity]
+        )
+    }
+
+    func testCountdownCanBeCancelledBeforeAnyLockRequest() {
+        let adapter = NeverLockingTestAdapter()
+        let log = InMemoryShadowModeLog()
+        let controller = InterventionController(lockAdapter: adapter, shadowLog: log)
+        controller.apply(protectAssessment(), at: now)
+
+        XCTAssertTrue(controller.startPreLockCountdown(at: now, duration: 30))
+        XCTAssertTrue(controller.cancelPreLockCountdown(at: now.addingTimeInterval(10)))
+        XCTAssertEqual(controller.tick(at: now.addingTimeInterval(31)), .noCountdown)
+        XCTAssertTrue(adapter.requests.isEmpty)
+        XCTAssertTrue(log.events.contains { $0.action == .countdownCancelled })
+    }
+
+    func testDefaultConfigurationSuppressesFiredCountdownBeforeAdapterRequest() {
+        let adapter = NeverLockingTestAdapter()
+        let log = InMemoryShadowModeLog()
+        let controller = InterventionController(lockAdapter: adapter, shadowLog: log)
+        controller.apply(protectAssessment(), at: now)
+        XCTAssertTrue(controller.startPreLockCountdown(at: now, duration: 10))
+
+        XCTAssertEqual(
+            controller.tick(at: now.addingTimeInterval(10)),
+            .suppressedByDisabledLockRule
+        )
+        XCTAssertTrue(adapter.requests.isEmpty)
+        XCTAssertTrue(log.events.contains {
+            $0.action == .lockSuppressed && $0.detail == "local lock-screen rule is disabled"
+        })
+    }
+
+    func testEnabledLocalLockRuleIsRequiredBeforeAdapterCanReceiveRequest() {
+        let adapter = NeverLockingTestAdapter()
+        let controller = InterventionController(
+            lockAdapter: adapter,
+            protectionConfiguration: ProtectionConfiguration(
+                localLockScreenRule: LocalLockScreenRule(isEnabled: true)
+            )
+        )
+        controller.apply(protectAssessment(), at: now)
+        XCTAssertTrue(controller.startPreLockCountdown(at: now, duration: 10))
+
+        XCTAssertEqual(
+            controller.tick(at: now.addingTimeInterval(10)),
+            .lockRequested(.notPerformed(reason: "No real lock adapter is installed."))
+        )
+        XCTAssertEqual(adapter.requests.count, 1)
+    }
+
+    func testOnCallOverrideIsCappedAndLimitedPerProtectEpisode() {
+        let controller = InterventionController(
+            overridePolicy: OnCallOverridePolicy(maximumDuration: 60, maximumGrantsPerProtectEpisode: 1)
+        )
+        controller.apply(protectAssessment(), at: now)
+
+        guard case let .granted(override) = controller.grantOnCallOverride(requestedDuration: 600, at: now) else {
+            return XCTFail("Expected a granted override")
+        }
+        XCTAssertEqual(override.grantedDuration, 60)
+        XCTAssertEqual(override.expiresAt, now.addingTimeInterval(60))
+        XCTAssertEqual(
+            controller.grantOnCallOverride(requestedDuration: 30, at: now.addingTimeInterval(1)),
+            .rejected(reason: "Override grant limit reached for this protect episode.")
+        )
+    }
+
+    func testReturningToRoutineCancelsCountdownAndResetsIntervention() {
+        let adapter = NeverLockingTestAdapter()
+        let controller = InterventionController(lockAdapter: adapter)
+        controller.apply(protectAssessment(), at: now)
+        XCTAssertTrue(controller.startPreLockCountdown(at: now, duration: 10))
+
+        controller.apply(
+            WorkPatternAssessment(state: .routine, totalActiveDuration: 0, currentContinuousActiveDuration: 0, appSwitchCount: 0, reasons: [.noRecentActivity]),
+            at: now.addingTimeInterval(5)
+        )
+
+        XCTAssertEqual(controller.state, .routine)
+        XCTAssertEqual(controller.tick(at: now.addingTimeInterval(11)), .noCountdown)
+        XCTAssertTrue(adapter.requests.isEmpty)
+    }
+
+    func testLocalShadowModeLogAppendsOnlyToItsSelectedLocalFile() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OffshiftCompanionCoreTests-\(UUID().uuidString)", isDirectory: true)
+        let logURL = directory.appendingPathComponent("shadow.jsonl")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let log = LocalShadowModeLog(fileURL: logURL)
+        log.append(ShadowModeEvent(timestamp: now, action: .assessment, detail: "fixture"))
+        log.append(ShadowModeEvent(timestamp: now, action: .countdownCancelled, detail: "fixture"))
+
+        let lines = try String(contentsOf: logURL, encoding: .utf8)
+            .split(separator: "\n")
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertTrue(lines.allSatisfy { $0.contains("fixture") })
+    }
+}

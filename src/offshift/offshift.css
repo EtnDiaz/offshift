@@ -16,7 +16,8 @@
 }
 
 .offshift-widget__snapshot,
-.offshift-widget__plan {
+.offshift-widget__plan,
+.offshift-widget__pattern {
   border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.12));
   border-radius: var(--border-radius-lg, 1rem);
   background: var(--color-background-primary, #fff);
@@ -28,6 +29,57 @@
 
 .offshift-widget__plan {
   padding: 1.25rem;
+}
+
+.offshift-widget__pattern {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.offshift-widget__companion {
+  display: grid;
+  position: relative;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.12));
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--color-background-primary, #fff) 82%, #dbeafe);
+  color: var(--color-text-primary, #171717);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.offshift-widget__companion--drift {
+  background: color-mix(in srgb, var(--color-background-primary, #fff) 72%, #fef3c7);
+}
+
+.offshift-widget__companion--protect {
+  background: color-mix(in srgb, var(--color-background-primary, #fff) 68%, #fee2e2);
+}
+
+.offshift-widget__moon {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.4rem;
+  color: var(--color-text-secondary, #6b7280);
+  font-family: inherit;
+  font-size: 1.25rem;
+}
+
+.offshift-widget__companion-face {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2rem;
+  border: 1px solid currentColor;
+  border-radius: 0.45rem;
+  background: var(--color-background-primary, #fff);
 }
 
 .offshift-widget__heading-row,
@@ -127,6 +179,16 @@
   line-height: 1.4;
 }
 
+.offshift-widget__reasons {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+  color: var(--color-text-secondary, #4b5563);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
 .offshift-widget__availability {
   color: var(--color-text-secondary, #6b7280);
 }
@@ -147,5 +209,9 @@
 
   .offshift-widget__actions > * {
     flex: 1 1 10rem;
+  }
+
+  .offshift-widget__pattern {
+    grid-template-columns: 1fr;
   }
 }

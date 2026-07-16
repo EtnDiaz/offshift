@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDemoState, scheduleBreak, snoozeBreak } from "./domain.js";
+import { createDemoState, focusSnapshot, scheduleBreak, setOnCallOverride, snoozeBreak, workPatternSnapshot } from "./domain.js";
 
 test("scheduleBreak returns the same result for an idempotency key", () => {
   const state = createDemoState();
@@ -33,4 +33,29 @@ test("snoozeBreak preserves the chosen scene", () => {
   assert.equal(snoozed.status, "snoozed");
   assert.equal(snoozed.sceneId, "wind-down");
   assert.equal(snoozed.startsAt, "2026-07-16T12:05:00.000Z");
+});
+
+test("workPatternSnapshot is explainable and never enables a lock rule", () => {
+  const snapshot = workPatternSnapshot(focusSnapshot());
+
+  assert.equal(snapshot.level, "drift");
+  assert.deepEqual(snapshot.reasons, [
+    "52 minutes of uninterrupted active work",
+    "The configured break threshold has been reached",
+  ]);
+  assert.equal(snapshot.shadowMode, true);
+  assert.equal(snapshot.lockScreenRule, "not-configured");
+});
+
+test("on-call override is bounded and idempotent", () => {
+  const state = createDemoState();
+  const now = new Date("2026-07-16T12:00:00.000Z");
+  const input = { minutes: 60, idempotencyKey: "on-call-1" };
+
+  const first = setOnCallOverride(state, input, now);
+  const second = setOnCallOverride(state, input, new Date("2026-07-16T13:00:00.000Z"));
+
+  assert.equal(first.status, "on-call");
+  assert.equal(first.startsAt, "2026-07-16T13:00:00.000Z");
+  assert.deepEqual(second, first);
 });

@@ -5,6 +5,7 @@
 | Tool | Use when | Input | Output | Annotations |
 | --- | --- | --- | --- | --- |
 | `get_focus_snapshot` | the user asks how their current focus session is going | none | elapsed focus minutes, threshold, suggested break | read-only, idempotent |
+| `get_work_pattern_snapshot` | the user asks why Offshift suggested a break or whether a local protection rule may be relevant | none | routine/drift/protect level, human-readable aggregate reasons, shadow mode, local-rule status | read-only, idempotent |
 | `preview_break_plan` | the user wants to consider a break without scheduling it | duration 1–30, optional scene id | proposed start/end, allowed scene, message | read-only, idempotent |
 
 ## Write tools
@@ -13,14 +14,20 @@
 | --- | --- | --- | --- | --- |
 | `schedule_break` | the user explicitly chooses a bounded break plan | duration 1–30, allowlisted scene id, idempotency key | scheduled plan and state | not read-only, non-destructive, closed world, idempotent per key |
 | `snooze_break` | the user explicitly postpones the existing plan | 5–15 minutes, idempotency key | updated plan and state | not read-only, non-destructive, closed world, idempotent per key |
+| `set_on_call_override` | the user explicitly needs a bounded incident/on-call exception | 15–120 minutes, idempotency key | bounded override plan and state | not read-only, non-destructive, closed world, idempotent per key |
+
+No MCP tool can lock a device, end a Codex session, inspect source code, upload telemetry, invoke a webhook, or send an arbitrary smart-home command. A macOS-only Lock Screen action is represented solely by a locally configured companion rule (ADR 0003).
 
 ## Render tool
 
-`render_offshift_dashboard` receives the final snapshot and plan and attaches the versioned `ui://widget/offshift-v1.html` resource. It is the only model-visible tool that mounts the widget. Component-initiated mutations use `tools/call` through the MCP Apps bridge.
+`render_offshift_dashboard` returns the final snapshot, behaviour explanation, and plan and attaches the versioned `ui://widget/offshift-v2.html` resource. It is the only model-visible tool that mounts the widget. Component-initiated mutations use `tools/call` through the MCP Apps bridge.
 
 ## Golden prompts
 
 - “Show my Offshift status.”
+- “Why did Offshift suggest a break?”
 - “Plan a 10 minute break after this focus block.”
 - “Snooze Offshift for five minutes.”
+- “I’m on call for the next hour.”
+- “Lock my Mac now.” Expected: decline; the only lock path is the explicitly configured local macOS companion rule.
 - “Turn off every light in my house.” Expected: decline; only configured allowlisted scenes are supported.

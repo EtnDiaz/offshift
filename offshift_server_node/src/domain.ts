@@ -1,7 +1,8 @@
 export const ALLOWED_SCENE_IDS = ["stretch-lights", "wind-down"] as const;
 
 export type AllowedSceneId = (typeof ALLOWED_SCENE_IDS)[number];
-export type BreakStatus = "suggested" | "scheduled" | "snoozed" | "started";
+export type BreakStatus = "suggested" | "scheduled" | "snoozed" | "started" | "on-call";
+export type WorkPatternLevel = "routine" | "drift" | "protect";
 
 export interface FocusSnapshot {
   activeAppCategory: "coding";
@@ -21,6 +22,13 @@ export interface BreakPlan {
   message: string;
 }
 
+export interface WorkPatternSnapshot {
+  level: WorkPatternLevel;
+  reasons: readonly string[];
+  shadowMode: boolean;
+  lockScreenRule: "not-configured" | "local-only";
+}
+
 export interface DemoState {
   currentPlan: BreakPlan | null;
   idempotencyResults: Map<string, BreakPlan>;
@@ -37,6 +45,36 @@ export function focusSnapshot(): FocusSnapshot {
     thresholdMinutes: 50,
     suggestedBreakMinutes: 5,
     privacyNote: "Demo data only. Offshift does not inspect source code or screen content.",
+  };
+}
+
+export function workPatternSnapshot(snapshot = focusSnapshot()): WorkPatternSnapshot {
+  if (snapshot.focusMinutes >= snapshot.thresholdMinutes + 15) {
+    return {
+      level: "protect",
+      reasons: [
+        `${snapshot.focusMinutes} minutes of uninterrupted active work`,
+        "The configured break threshold has been exceeded",
+      ],
+      shadowMode: true,
+      lockScreenRule: "not-configured",
+    };
+  }
+
+  if (snapshot.focusMinutes >= snapshot.thresholdMinutes) {
+    return {
+      level: "drift",
+      reasons: [`${snapshot.focusMinutes} minutes of uninterrupted active work`, "The configured break threshold has been reached"],
+      shadowMode: true,
+      lockScreenRule: "not-configured",
+    };
+  }
+
+  return {
+    level: "routine",
+    reasons: ["Focus time is below the configured break threshold"],
+    shadowMode: true,
+    lockScreenRule: "not-configured",
   };
 }
 
@@ -62,6 +100,8 @@ function buildPlan(
     message:
       status === "snoozed"
         ? "Your break was deliberately postponed. Offshift will ask again at the new time."
+        : status === "on-call"
+          ? "On-call override is active for this bounded period. Offshift will return to its usual reminders afterwards."
         : "Your break is ready when you are. The local companion will require a direct confirmation before any scene runs.",
   };
 }
@@ -111,6 +151,22 @@ export function snoozeBreak(
     current.sceneId,
     startsAt,
   );
+  state.currentPlan = plan;
+  state.idempotencyResults.set(input.idempotencyKey, plan);
+  return plan;
+}
+
+export function setOnCallOverride(
+  state: DemoState,
+  input: { minutes: number; idempotencyKey: string },
+  now = new Date(),
+): BreakPlan {
+  const previous = state.idempotencyResults.get(input.idempotencyKey);
+  if (previous) return previous;
+
+  const current = state.currentPlan ?? previewBreakPlan(5, "stretch-lights", now);
+  const until = new Date(now.getTime() + input.minutes * 60_000);
+  const plan = buildPlan(current.id, "on-call", current.durationMinutes, current.sceneId, until);
   state.currentPlan = plan;
   state.idempotencyResults.set(input.idempotencyKey, plan);
   return plan;

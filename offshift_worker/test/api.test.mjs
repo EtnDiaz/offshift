@@ -18,10 +18,29 @@ async function responseJson(response) {
   return response.json();
 }
 
+async function mcp(worker, id, method, params = {}) {
+  const response = await worker.fetch(request("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", "mcp-protocol-version": "2026-01-26" },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  }), {}, {});
+  assert.equal(response.status, 200);
+  const body = await responseJson(response);
+  assert.equal(body.jsonrpc, "2.0");
+  assert.equal(body.id, id);
+  assert.equal(body.error, undefined);
+  return body.result;
+}
+
 test("health returns a stable service response", async () => {
   const response = await app().fetch(request("/health"), {}, {});
   assert.equal(response.status, 200);
-  assert.deepEqual(await responseJson(response), { status: "ok", service: "offshift-demo-api" });
+  assert.deepEqual(await responseJson(response), {
+    status: "ok",
+    service: "offshift-demo-api",
+    mcpPath: "/mcp",
+    widgetUri: "ui://widget/offshift-worker-v1.html",
+  });
 });
 
 test("focus snapshot is deterministic for a user", async () => {
@@ -31,6 +50,22 @@ test("focus snapshot is deterministic for a user", async () => {
   assert.deepEqual(first, second);
   assert.equal(first.userId, "ada");
   assert.ok(first.focusScore >= 55 && first.focusScore <= 90);
+});
+
+test("behavior policy and snapshot REST endpoints are explainable and local-only", async () => {
+  const worker = app();
+  const policy = await responseJson(await worker.fetch(request("/v1/behavior/policy"), {}, {}));
+  const snapshot = await responseJson(await worker.fetch(request("/v1/behavior/snapshot?userId=ada"), {}, {}));
+  assert.equal(policy.mode, "shadow");
+  assert.equal(policy.decisionOwner, "local-companion");
+  assert.deepEqual(policy.forbiddenRemoteActions, [
+    "remote lock commands",
+    "ending a Codex session or submitting code",
+    "arbitrary webhooks or device commands",
+  ]);
+  assert.equal(snapshot.userId, "ada");
+  assert.equal(snapshot.canTriggerRemoteAction, false);
+  assert.match(snapshot.explanation, /aggregate activity/);
 });
 
 test("preview accepts only allowlisted break actions", async () => {
@@ -72,6 +107,19 @@ test("schedule and snooze produce bounded, deterministic plan changes", async ()
   assert.deepEqual(await responseJson(snoozed), { ...plan, status: "snoozed", startAt: "2026-07-16T10:25:00.000Z", snoozeCount: 1 });
 });
 
+test("schedule retries with an idempotency key do not create another break", async () => {
+  const worker = app();
+  const options = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "walk", userId: "ada", startInMinutes: 15, idempotencyKey: "rest-plan-0001" }),
+  };
+  const first = await responseJson(await worker.fetch(request("/v1/breaks/schedule", options), {}, {}));
+  const second = await responseJson(await worker.fetch(request("/v1/breaks/schedule", options), {}, {}));
+  assert.deepEqual(second, first);
+  assert.equal(second.id, "break-0001");
+});
+
 test("schedule and snooze reject values beyond their safety bounds", async () => {
   const worker = app();
   const overscheduled = await worker.fetch(request("/v1/breaks/schedule", {
@@ -87,4 +135,100 @@ test("schedule and snooze reject values beyond their safety bounds", async () =>
     body: JSON.stringify({ minutes: 4 }),
   }), {}, {});
   assert.equal(missing.status, 400);
+});
+
+test("MCP exposes the decoupled tools with accurate safety annotations", async () => {
+  const worker = app();
+  const initialized = await mcp(worker, 1, "initialize", { protocolVersion: "2026-01-26", capabilities: {}, clientInfo: { name: "test", version: "1" } });
+  assert.equal(initialized.protocolVersion, "2026-01-26");
+  assert.match(initialized.instructions, /never infer health/);
+
+  const { tools } = await mcp(worker, 2, "tools/list");
+  assert.deepEqual(tools.map((tool) => tool.name), [
+    "get_focus_snapshot",
+    "get_behavior_policy_snapshot",
+    "preview_break_plan",
+    "schedule_break",
+    "snooze_break",
+    "render_offshift_dashboard",
+  ]);
+  const schedule = tools.find((tool) => tool.name === "schedule_break");
+  assert.deepEqual(schedule.annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    openWorldHint: false,
+    idempotentHint: true,
+  });
+  const render = tools.find((tool) => tool.name === "render_offshift_dashboard");
+  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v1.html");
+  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v1.html");
+  assert.equal(tools.some((tool) => /webhook|lock|command/i.test(tool.name)), false);
+});
+
+test("MCP resource read returns a versioned Apps SDK widget with a closed CSP", async () => {
+  const worker = app();
+  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v1.html" });
+  assert.equal(contents.length, 1);
+  assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
+  assert.deepEqual(contents[0]._meta.ui.csp, { connectDomains: [], resourceDomains: [] });
+  assert.match(contents[0].text, /ui\/initialize/);
+  assert.doesNotMatch(contents[0].text, /window\.openai/);
+});
+
+test("MCP behavior snapshot is explainable, shadow-only, and cannot trigger remote actions", async () => {
+  const worker = app();
+  const result = await mcp(worker, 4, "tools/call", {
+    name: "get_behavior_policy_snapshot",
+    arguments: { userId: "ada" },
+  });
+  const { policy, snapshot } = result.structuredContent;
+  assert.equal(policy.mode, "shadow");
+  assert.equal(policy.decisionOwner, "local-companion");
+  assert.deepEqual(policy.forbiddenRemoteActions, [
+    "remote lock commands",
+    "ending a Codex session or submitting code",
+    "arbitrary webhooks or device commands",
+  ]);
+  assert.equal(snapshot.mode, "shadow");
+  assert.equal(snapshot.canTriggerRemoteAction, false);
+  assert.match(snapshot.explanation, /aggregate activity/);
+});
+
+test("MCP mutation retries are idempotent and require explicit idempotency keys", async () => {
+  const worker = app();
+  const params = {
+    name: "schedule_break",
+    arguments: { action: "stretch", userId: "ada", startInMinutes: 5, idempotencyKey: "mcp-plan-0001" },
+  };
+  const first = await mcp(worker, 5, "tools/call", params);
+  const second = await mcp(worker, 6, "tools/call", params);
+  assert.deepEqual(second.structuredContent.plan, first.structuredContent.plan);
+
+  const invalid = await worker.fetch(request("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "schedule_break", arguments: { action: "stretch", startInMinutes: 5 } } }),
+  }), {}, {});
+  const invalidBody = await responseJson(invalid);
+  assert.equal(invalidBody.error.code, -32602);
+  assert.match(invalidBody.error.message, /idempotencyKey is required/);
+});
+
+test("the Worker exposes no remote lock action on either REST or MCP", async () => {
+  const worker = app();
+  const rest = await worker.fetch(request("/v1/devices/lock", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  }), {}, {});
+  assert.equal(rest.status, 404);
+
+  const mcpResponse = await worker.fetch(request("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "lock_device", arguments: {} } }),
+  }), {}, {});
+  const mcpBody = await responseJson(mcpResponse);
+  assert.equal(mcpBody.error.code, -32602);
+  assert.match(mcpBody.error.message, /Unknown Offshift tool/);
 });

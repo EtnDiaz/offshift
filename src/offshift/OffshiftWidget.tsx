@@ -17,6 +17,16 @@ function formatMinutes(minutes: number): string {
   return `${minutes} min${minutes === 1 ? "" : "s"}`;
 }
 
+function CompanionMascot({ level }: { level: OffshiftWidgetData["behaviour"]["level"] }) {
+  const expression = level === "protect" ? "•_•" : level === "drift" ? "o_o" : "^_^";
+  return (
+    <div className={`offshift-widget__companion offshift-widget__companion--${level}`} aria-hidden="true">
+      <span className="offshift-widget__moon">☾</span>
+      <span className="offshift-widget__companion-face">{expression}</span>
+    </div>
+  );
+}
+
 function idempotencyKey(action: ActionName): string {
   const random = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -53,21 +63,31 @@ export default function OffshiftWidget() {
 
     try {
       const result = await app.callServerTool({
-        name: action === "schedule" ? OFFSHIFT_TOOLS.scheduleBreak : OFFSHIFT_TOOLS.snoozeBreak,
+        name: action === "schedule"
+          ? OFFSHIFT_TOOLS.scheduleBreak
+          : action === "snooze"
+            ? OFFSHIFT_TOOLS.snoozeBreak
+            : OFFSHIFT_TOOLS.onCallOverride,
         arguments: action === "schedule"
           ? {
               durationMinutes: data.plan.durationMinutes,
               sceneId: data.plan.sceneId,
               idempotencyKey: idempotencyKey(action),
             }
-          : { minutes: 5, idempotencyKey: idempotencyKey(action) },
+          : { minutes: action === "snooze" ? 5 : 60, idempotencyKey: idempotencyKey(action) },
       });
       if (result.isError) throw new Error("Offshift could not complete that action.");
       const next = dataFromToolResult(result);
       if (!next) throw new Error("Offshift returned an incomplete break plan.");
       setData(next);
       setStatus("success");
-      setMessage(action === "schedule" ? "Break scheduled. Take it when the local prompt appears." : "Break reminder snoozed for 5 minutes.");
+      setMessage(
+        action === "schedule"
+          ? "Break scheduled. Take it when the local prompt appears."
+          : action === "snooze"
+            ? "Break reminder snoozed for 5 minutes."
+            : "On-call override set for 60 minutes. Your local rule remains under your control.",
+      );
     } catch (cause) {
       setStatus("error");
       setMessage(cause instanceof Error ? cause.message : "Offshift could not complete that action.");
@@ -88,7 +108,7 @@ export default function OffshiftWidget() {
   }
 
   const isWorking = status === "working";
-  const overdue = data.snapshot.focusMinutes >= data.snapshot.thresholdMinutes;
+  const riskCopy = data.behaviour.level === "protect" ? "Protect" : data.behaviour.level === "drift" ? "Drift" : "Routine";
 
   return (
     <main className="offshift-widget" aria-labelledby="offshift-title">
@@ -98,13 +118,27 @@ export default function OffshiftWidget() {
             <p className="offshift-widget__eyebrow">Offshift</p>
             <h1 id="offshift-title">Focus snapshot</h1>
           </div>
-          <Badge color={overdue ? "danger" : "secondary"}>{overdue ? "Break due" : "On track"}</Badge>
+          <Badge color={data.behaviour.level === "protect" ? "danger" : "secondary"}>{riskCopy}</Badge>
         </div>
         <dl className="offshift-widget__metrics">
           <div><dt>Focused</dt><dd>{formatMinutes(data.snapshot.focusMinutes)}</dd></div>
           <div><dt>Threshold</dt><dd>{formatMinutes(data.snapshot.thresholdMinutes)}</dd></div>
         </dl>
         <p className="offshift-widget__privacy">{data.snapshot.privacyNote}</p>
+      </section>
+
+      <section className="offshift-widget__pattern" aria-labelledby="work-pattern-title">
+        <CompanionMascot level={data.behaviour.level} />
+        <div>
+          <p className="offshift-widget__eyebrow">Offshift companion</p>
+          <h2 id="work-pattern-title">{data.behaviour.level === "protect" ? "Time to protect your wind-down" : "Here is what Offshift noticed"}</h2>
+          <ul className="offshift-widget__reasons">
+            {data.behaviour.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>
+          <p className="offshift-widget__availability">
+            {data.behaviour.shadowMode ? "Shadow-mode data is explainable and local." : "This is an active local reminder."} Lock Screen rule: {data.behaviour.lockScreenRule}.
+          </p>
+        </div>
       </section>
 
       <section className="offshift-widget__plan" aria-labelledby="break-plan-title">
@@ -123,6 +157,9 @@ export default function OffshiftWidget() {
           </Button>
           <Button color="secondary" variant="outline" size="md" disabled={isWorking} onClick={() => void runAction("snooze")}>
             Snooze 5 min
+          </Button>
+          <Button color="secondary" variant="outline" size="md" disabled={isWorking} onClick={() => void runAction("onCall")}>
+            On call for 60 min
           </Button>
         </div>
         {message && <p className={`offshift-widget__message offshift-widget__message--${status}`} role={status === "error" ? "alert" : "status"}>{message}</p>}

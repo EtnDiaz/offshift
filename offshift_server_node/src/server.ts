@@ -19,11 +19,15 @@ import {
   focusSnapshot,
   previewBreakPlan,
   scheduleBreak,
+  setOnCallOverride,
   snoozeBreak,
+  workPatternSnapshot,
 } from "./domain.js";
 
 const VERSION = "0.1.0";
-const TEMPLATE_URI = "ui://widget/offshift-v1.html";
+// Bump this URI whenever the widget markup, styles, or bridge behaviour changes.
+// ChatGPT caches resources by URI; the package build hash alone is not sufficient.
+const TEMPLATE_URI = "ui://widget/offshift-v2.html";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..", "..");
 const assetsDir = path.join(rootDir, "assets");
@@ -60,7 +64,12 @@ const planInput = {
 
 function toolResult(plan = demoState.currentPlan ?? previewBreakPlan(5, "stretch-lights")) {
   return {
-    structuredContent: { snapshot: focusSnapshot(), plan, allowedSceneIds: ALLOWED_SCENE_IDS },
+    structuredContent: {
+      snapshot: focusSnapshot(),
+      behaviour: workPatternSnapshot(),
+      plan,
+      allowedSceneIds: ALLOWED_SCENE_IDS,
+    },
     content: [{ type: "text" as const, text: plan.message }],
   };
 }
@@ -96,6 +105,15 @@ function createOffshiftServer(): McpServer {
     _meta: dataToolMeta,
   }, async () => ({ structuredContent: { snapshot: focusSnapshot() }, content: [{ type: "text", text: "The demo focus threshold has been reached; a five-minute break is suggested." }] }));
 
+  registerAppTool(server, "get_work_pattern_snapshot", {
+    title: "Get work-pattern snapshot",
+    description: "Use this when the user asks why Offshift suggested a break or whether a local protection rule is eligible. It returns only explainable aggregate categories, never code or screen content.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+    outputSchema: { behaviour: z.object({ level: z.enum(["routine", "drift", "protect"]), reasons: z.array(z.string()), shadowMode: z.boolean(), lockScreenRule: z.enum(["not-configured", "local-only"]) }) },
+    _meta: dataToolMeta,
+  }, async () => ({ structuredContent: { behaviour: workPatternSnapshot() }, content: [{ type: "text", text: "Offshift uses local, explainable aggregate signals only. It cannot remotely lock your device." }] }));
+
   registerAppTool(server, "preview_break_plan", {
     title: "Preview a break plan",
     description: "Use this when the user wants to evaluate a bounded break plan without changing their schedule.",
@@ -119,6 +137,14 @@ function createOffshiftServer(): McpServer {
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
     _meta: dataToolMeta,
   }, async ({ minutes, idempotencyKey }) => toolResult(snoozeBreak(demoState, { minutes, idempotencyKey })));
+
+  registerAppTool(server, "set_on_call_override", {
+    title: "Set an on-call override",
+    description: "Use this when the user explicitly needs a bounded 15–120 minute on-call period before Offshift resumes its normal reminder cadence.",
+    inputSchema: { minutes: z.number().int().min(15).max(120).default(60), idempotencyKey: z.string().min(8).max(128) },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false, idempotentHint: true },
+    _meta: dataToolMeta,
+  }, async ({ minutes, idempotencyKey }) => toolResult(setOnCallOverride(demoState, { minutes, idempotencyKey })));
 
   registerAppTool(server, "render_offshift_dashboard", {
     title: "Show Offshift dashboard",
