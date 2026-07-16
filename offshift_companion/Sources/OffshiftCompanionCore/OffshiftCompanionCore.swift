@@ -510,6 +510,7 @@ public struct LockRequest: Equatable, Sendable {
 }
 
 public enum LockAttempt: Equatable, Sendable {
+    case initiated
     case notPerformed(reason: String)
 }
 
@@ -517,9 +518,19 @@ public enum LockAttempt: Equatable, Sendable {
 /// A host must configure this rule locally; model output must not enable it.
 public struct LocalLockScreenRule: Equatable, Sendable {
     public let isEnabled: Bool
+    public let countdownDuration: TimeInterval
+    public let maximumLockAttemptsPerProtectEpisode: Int
 
-    public init(isEnabled: Bool = false) {
+    public init(
+        isEnabled: Bool = false,
+        countdownDuration: TimeInterval = 30,
+        maximumLockAttemptsPerProtectEpisode: Int = 1
+    ) {
+        precondition(countdownDuration > 0)
+        precondition(maximumLockAttemptsPerProtectEpisode > 0)
         self.isEnabled = isEnabled
+        self.countdownDuration = countdownDuration
+        self.maximumLockAttemptsPerProtectEpisode = maximumLockAttemptsPerProtectEpisode
     }
 }
 
@@ -532,8 +543,8 @@ public struct ProtectionConfiguration: Equatable, Sendable {
     }
 }
 
-/// The only boundary where a future, user-approved local locking integration may be attached.
-/// This package intentionally provides no real implementation.
+/// The only boundary where a user-approved host may attach a system Lock Screen integration.
+/// The core never calls the operating system directly.
 public protocol LocalLockAdapter: AnyObject {
     func requestLocalLock(_ request: LockRequest) -> LockAttempt
 }
@@ -627,6 +638,7 @@ public enum InterventionTickResult: Equatable, Sendable {
     case noCountdown
     case suppressedByOverride
     case suppressedByDisabledLockRule
+    case suppressedByLockLimit
     case lockRequested(LockAttempt)
 }
 
@@ -641,6 +653,7 @@ public final class InterventionController {
     private let overridePolicy: OnCallOverridePolicy
     private let protectionConfiguration: ProtectionConfiguration
     private var grantsInProtectEpisode = 0
+    private var lockAttemptsInProtectEpisode = 0
 
     public init(
         lockAdapter: any LocalLockAdapter = NeverLockingTestAdapter(),
@@ -679,8 +692,10 @@ public final class InterventionController {
             }
             activeOverride = nil
             grantsInProtectEpisode = 0
+            lockAttemptsInProtectEpisode = 0
         } else if previous != .protect {
             grantsInProtectEpisode = 0
+            lockAttemptsInProtectEpisode = 0
         }
         return state
     }
@@ -752,7 +767,16 @@ public final class InterventionController {
                 ))
                 return .suppressedByDisabledLockRule
             }
+            guard lockAttemptsInProtectEpisode < protectionConfiguration.localLockScreenRule.maximumLockAttemptsPerProtectEpisode else {
+                shadowLog.append(ShadowModeEvent(
+                    timestamp: now,
+                    action: .lockSuppressed,
+                    detail: "local lock-screen rule reached its protect-episode attempt limit"
+                ))
+                return .suppressedByLockLimit
+            }
             let request = LockRequest(requestedAt: now, reason: "Pre-lock countdown elapsed while protect state remained active.")
+            lockAttemptsInProtectEpisode += 1
             let attempt = lockAdapter.requestLocalLock(request)
             shadowLog.append(ShadowModeEvent(timestamp: now, action: .lockRequested, detail: "\(attempt)"))
             return .lockRequested(attempt)

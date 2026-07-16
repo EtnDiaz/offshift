@@ -8,8 +8,8 @@ This SwiftPM package contains the local decision core for the future macOS compa
 - `WorkPatternRiskPolicy` can add user-configured quiet-hours, repeated-snooze, and next-day-early-start facts to that explanation. Context never creates an intervention without local activity, and an early start cannot independently escalate it.
 - `InterventionController` moves between `routine`, `drift`, and `protect`; it exposes a manually driven, cancellable pre-lock countdown.
 - An on-call override is capped by duration and grants per protect episode.
-- `ProtectionConfiguration` disables `LocalLockScreenRule` by default. A fired countdown is logged as suppressed and cannot contact an adapter until a host explicitly enables a locally configured rule.
-- `NeverLockingTestAdapter` is the only default `LocalLockAdapter`. It records requests and **never locks the screen**.
+- `ProtectionConfiguration` disables `LocalLockScreenRule` by default. A fired countdown is logged as suppressed and cannot contact an adapter until a host explicitly enables a locally configured rule. Enabled rules use one visible 30-second countdown and permit one lock attempt per protect episode.
+- `NeverLockingTestAdapter` remains the default core adapter. The macOS host has a separately opt-in system adapter that posts Control-Command-Q only after local Settings confirmation and macOS Accessibility permission; tests never invoke it.
 - `InMemoryShadowModeLog` is suitable for tests; `LocalShadowModeLog` appends JSON-lines to a caller-selected local file.
 
 The included macOS host is a menu-bar and window-based fixture over the core. It samples aggregate local active/idle time once per minute using only elapsed durations, then feeds opaque `active-session` intervals into the heuristic. It makes routine/drift/protect state, the cancellable intervention window, and bounded on-call behaviour visible. Its Lock Screen control is deliberately disabled and no real adapter ships in this build.

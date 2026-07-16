@@ -221,6 +221,33 @@ final class InterventionControllerTests: XCTestCase {
         XCTAssertEqual(adapter.requests.count, 1)
     }
 
+    func testEnabledRuleLimitsLockAttemptsToOnePerProtectEpisode() {
+        let adapter = NeverLockingTestAdapter()
+        let log = InMemoryShadowModeLog()
+        let controller = InterventionController(
+            lockAdapter: adapter,
+            shadowLog: log,
+            protectionConfiguration: ProtectionConfiguration(
+                localLockScreenRule: LocalLockScreenRule(
+                    isEnabled: true,
+                    countdownDuration: 10,
+                    maximumLockAttemptsPerProtectEpisode: 1
+                )
+            )
+        )
+        controller.apply(protectAssessment(), at: now)
+        XCTAssertTrue(controller.startPreLockCountdown(at: now, duration: 10))
+        XCTAssertEqual(
+            controller.tick(at: now.addingTimeInterval(10)),
+            .lockRequested(.notPerformed(reason: "No real lock adapter is installed."))
+        )
+
+        XCTAssertTrue(controller.startPreLockCountdown(at: now.addingTimeInterval(11), duration: 10))
+        XCTAssertEqual(controller.tick(at: now.addingTimeInterval(21)), .suppressedByLockLimit)
+        XCTAssertEqual(adapter.requests.count, 1)
+        XCTAssertTrue(log.events.contains { $0.action == .lockSuppressed && $0.detail.contains("attempt limit") })
+    }
+
     func testOnCallOverrideIsCappedAndLimitedPerProtectEpisode() {
         let controller = InterventionController(
             overridePolicy: OnCallOverridePolicy(maximumDuration: 60, maximumGrantsPerProtectEpisode: 1)

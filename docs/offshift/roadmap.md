@@ -8,7 +8,7 @@ The product calls this a **work-pattern risk**, never a health score. All detect
 
 ## What is already built
 
-The first local slice is complete: an Apps SDK widget, local Node MCP server, bounded/idempotent schedule and snooze tools, and a tested Cloudflare Worker demo API. It uses fixture data; it does not yet observe a real session, present a monitor-level overlay, or control a home device.
+The first local slice is complete: an Apps SDK widget, local Node MCP server, bounded/idempotent schedule and snooze tools, a tested Cloudflare Worker demo API, and a macOS companion. The companion observes only aggregate active/idle duration locally, has a protection window, supports a disabled-by-default local Lock Screen rule, and can run one locally confirmed Home Assistant `wind-down` scene. It still needs public Apps SDK runtime validation and pilot evidence before the protection rule should be recommended.
 
 ## Sequenced milestones
 
@@ -37,7 +37,7 @@ Use three explainable bands rather than an opaque score:
 
 1. **Routine** — dashboard shows the next break only.
 2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago; tomorrow's early start is enabled.”
-3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule also sees a cancellable countdown; the companion may then invoke macOS's own Lock Screen. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
+3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule sees one cancellable 30-second countdown; the companion may then invoke macOS's own Lock Screen once in that protect episode. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
 
 The user must see the contributing categories, change thresholds, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
 
@@ -67,6 +67,6 @@ The user must see the contributing categories, change thresholds, turn Offshift 
 
 ## Immediate next work
 
-The next implementation milestone is **Real App loop**: turn the current local MCP server/Worker boundary into a public HTTPS preview and run the golden-prompt suite in ChatGPT Developer Mode. We should not build the macOS collector or Home Assistant action until that loop is visibly working.
+The next implementation milestone is **Real App loop**: turn the current local MCP server/Worker boundary into a public HTTPS preview and run the golden-prompt suite in ChatGPT Developer Mode. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
 
 The follow-on work is **shadow mode**, not an aggressive blocker: collect only the approved coarse signals, show the participant what would have been suggested, then decide whether a visible nudge is deserved. The auto-lock option comes only after that evidence, and always remains a local, named, cancellable rule.

@@ -76,15 +76,14 @@ struct ProtectionWindowView: View {
                     .buttonStyle(.borderedProminent)
                 Button("On call for 15 min") { store.grantOnCallOverride() }
                 Button("Cancel countdown") { store.cancelPreLockCountdown() }
+                Button("Start 30-second countdown") { store.startPreLockCountdown() }
+                    .disabled(!store.canStartCountdown)
             }
 
-            Toggle("Enable local Lock Screen rule", isOn: Binding(
-                get: { store.lockRuleEnabled },
-                set: { store.setLockRuleEnabled($0) }
-            ))
-            .disabled(true)
+            Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
+                .font(.callout.weight(.medium))
 
-            Text("This build keeps the rule disabled. Enabling a real system Lock Screen action requires a separate, local consent flow and a reviewed adapter.")
+            Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -138,12 +137,26 @@ struct MenuBarContent: View {
 
 struct CompanionSettingsView: View {
     @ObservedObject var store: CompanionStore
+    @State private var showingLockScreenConfirmation = false
 
     var body: some View {
         Form {
             Section("Protection") {
-                Text("Lock Screen is disabled in this build.")
-                Text("A production rule must be configured locally with explicit thresholds, a visible countdown, cancel, and bounded on-call override.")
+                Text("A local rule can use the macOS Lock Screen shortcut only after explicit confirmation.")
+                Text("Rule: when the local policy remains Protect, start one visible 30-second countdown. Cancel and a bounded 15-minute on-call override remain available.")
+                    .foregroundStyle(.secondary)
+                if store.lockRuleEnabled {
+                    Text("Enabled only on this Mac.")
+                    Button("Disable local Lock Screen rule", role: .destructive) {
+                        store.lockScreenSettings.disableImmediately()
+                    }
+                } else {
+                    Button("Enable local Lock Screen rule…") {
+                        showingLockScreenConfirmation = true
+                    }
+                }
+                Text(store.lockScreenSettings.accessibilityStatus)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Section("Current state") {
@@ -174,6 +187,17 @@ struct CompanionSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .confirmationDialog(
+            "Enable the local Lock Screen rule?",
+            isPresented: $showingLockScreenConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Enable local rule") {
+                store.lockScreenSettings.enableAfterLocalConfirmation()
+            }
+        } message: {
+            Text("Only when the local companion remains in Protect, Offshift will show one 30-second visible countdown and then post macOS's Lock Screen shortcut. You can cancel the countdown or use one 15-minute on-call override. ChatGPT and the Worker cannot trigger this rule.")
         }
         .padding(24)
         .frame(width: 520)

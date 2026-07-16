@@ -14,7 +14,7 @@ Offshift notices an opt-in *work-pattern risk* and gives a developer a clear nex
 2. A developer opens Offshift in ChatGPT and asks for their status, or the local companion raises a bounded nudge at an agreed threshold.
 3. The app presents the observed pattern and an explicit break plan.
 4. The developer starts the break, snoozes it by five minutes, or selects an on-call override with a reason and a return time. In a separately enabled Protect mode, they see a local pre-lock countdown and can cancel it before the macOS Lock Screen is invoked.
-5. The local companion, introduced after this MVP, receives only the approved schedule and shows a local action-required overlay.
+5. The local companion receives only the approved schedule and shows a local action-required overlay. Its optional Lock Screen rule is locally configured, visibly counted down, cancellable, and unavailable to ChatGPT or the Worker.
 6. One preconfigured Home Assistant scene (`wind-down`) may run only after the user confirms it locally in the companion. Its endpoint and token never leave the Mac.
 
 ## Non-goals
