@@ -41,6 +41,11 @@ struct CompanionDashboardView: View {
                     Text(store.nightCareSettings.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if !store.nightCareSettings.isEnabled {
+                        Button("Enable night care (11 PM–7 AM)") {
+                            store.nightCareSettings.setEnabled(true)
+                        }
+                    }
                     Text("These controls work only on this Mac. ChatGPT cannot pause, resume, or turn Offshift off for you.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -50,7 +55,7 @@ struct CompanionDashboardView: View {
                                 .buttonStyle(.borderedProminent)
                             Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
                         } else if store.isOffshiftEnabled {
-                            Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
+                            Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
                             Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
                         } else {
                             Button("Turn Offshift on") { store.resumeOffshift() }
@@ -91,77 +96,81 @@ struct CompanionDashboardView: View {
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
     @State private var showingWindDownConfirmation = false
+    @AccessibilityFocusState private var isCareMessageFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(store.careHeadline)
-                .font(.title2.weight(.semibold))
-            Text(store.careMessage)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(.secondary)
-            Text("This is your gentle ejection from work for tonight — not a punishment. Nothing here ends your work or reaches your code.")
-                .font(.callout)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(store.careReason)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(store.countdownText)
-                .font(.callout)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(store.careHeadline)
+                    .font(.title2.weight(.semibold))
+                    .accessibilityFocused($isCareMessageFocused)
+                Text(store.careMessage)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.secondary)
+                Text("This is your gentle ejection from work for tonight — not a punishment. Nothing here ends your work or reaches your code.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(store.careReason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(store.countdownText)
+                    .font(.callout)
+                    .accessibilityLabel("Lock Screen status: \(store.countdownText)")
 
-            HStack {
+                VStack(alignment: .leading, spacing: 10) {
                 Button("Take 5") { store.takeFive() }
                     .buttonStyle(.borderedProminent)
                 Button("On call for 15 min") { store.grantOnCallOverride() }
-                Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
-            }
-            HStack {
+                Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
                 Button("Cancel countdown") { store.cancelPreLockCountdown() }
                 Button("Start 30-second countdown") { store.startPreLockCountdown() }
                     .disabled(!store.canStartCountdown)
-            }
+                }
 
-            Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
-                .font(.callout.weight(.medium))
+                Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
+                    .font(.callout.weight(.medium))
 
-            Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Home Assistant wind-down")
-                    .font(.headline)
-                Text("The only scene this build can run is the locally configured wind-down scene. ChatGPT and the Worker never receive the endpoint or token.")
+                Text("The rule is configured only in local Settings. When enabled, Protect starts one visible 30-second countdown; you can cancel it or take one bounded on-call override.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("Run wind-down scene") {
-                    showingWindDownConfirmation = true
-                }
-                .disabled(!store.canRunWindDown)
-                .confirmationDialog(
-                    "Run your local wind-down scene?",
-                    isPresented: $showingWindDownConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button("Run wind-down scene") { store.runWindDownScene() }
-                } message: {
-                    Text("This sends one request to the Home Assistant endpoint configured only on this Mac. It does not lock your Mac or end your work.")
-                }
-                Text(store.windDownStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
-            if let onCallMessage = store.onCallMessage {
-                Text(onCallMessage)
-                    .font(.caption)
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Home Assistant wind-down")
+                        .font(.headline)
+                    Text("The only scene this build can run is the locally configured wind-down scene. ChatGPT and the Worker never receive the endpoint or token.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Run wind-down scene") {
+                        showingWindDownConfirmation = true
+                    }
+                    .disabled(!store.canRunWindDown)
+                    .confirmationDialog(
+                        "Run your local wind-down scene?",
+                        isPresented: $showingWindDownConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Run wind-down scene") { store.runWindDownScene() }
+                    } message: {
+                        Text("This sends one request to the Home Assistant endpoint configured only on this Mac. It does not lock your Mac or end your work.")
+                    }
+                    Text(store.windDownStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let onCallMessage = store.onCallMessage {
+                    Text(onCallMessage)
+                        .font(.caption)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+            .padding(.top, 28)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(24)
-        .padding(.top, 28)
+        .onAppear { isCareMessageFocused = true }
     }
 }
 
@@ -195,7 +204,7 @@ struct CompanionSettingsView: View {
                     }
                 } else if store.isOffshiftEnabled {
                     HStack {
-                        Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
+                        Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
                         Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
                     }
                 } else {
@@ -224,6 +233,10 @@ struct CompanionSettingsView: View {
                 Toggle("Enable nightly care", isOn: Binding(
                     get: { store.nightCareSettings.isEnabled },
                     set: { store.nightCareSettings.setEnabled($0) }
+                ))
+                Toggle("I have an early start tomorrow", isOn: Binding(
+                    get: { store.nightCareSettings.hasEarlyStartTomorrow },
+                    set: { store.nightCareSettings.setEarlyStartTomorrow($0) }
                 ))
                 Text("Quiet hours add context to sustained local activity. Time alone never opens protection or triggers a Lock Screen action.")
                     .foregroundStyle(.secondary)

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   OFFSHIFT_TOOLS,
   toOffshiftWidgetData,
+  widgetCapabilityFromToolResult,
   type ActionName,
   type ActionStatus,
   type OffshiftWidgetData,
@@ -30,6 +31,12 @@ function dataFromToolResult(result: unknown): OffshiftWidgetData | null {
   return toOffshiftWidgetData(toolResult.structuredContent);
 }
 
+function dashboardResultFromToolResult(result: unknown): { data: OffshiftWidgetData; widgetCapability: string } | null {
+  const data = dataFromToolResult(result);
+  const widgetCapability = widgetCapabilityFromToolResult(result);
+  return data && widgetCapability ? { data, widgetCapability } : null;
+}
+
 function formatTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 }
@@ -47,6 +54,7 @@ export default function OffshiftWidget() {
   const [message, setMessage] = useState<string | null>(null);
   const [connectionIssue, setConnectionIssue] = useState<string | null>(null);
   const actionKeys = useRef<Partial<Record<ActionName, string>>>({});
+  const widgetCapability = useRef<string | null>(null);
   const messageRef = useRef<HTMLParagraphElement>(null);
 
   const { app, error } = useApp({
@@ -54,12 +62,13 @@ export default function OffshiftWidget() {
     capabilities: {},
     onAppCreated: (createdApp: McpApp) => {
       createdApp.ontoolresult = (result) => {
-        const next = toOffshiftWidgetData(result.structuredContent);
+        const next = dashboardResultFromToolResult(result);
         if (next) {
-          setData(next);
+          widgetCapability.current = next.widgetCapability;
+          setData(next.data);
           setConnectionIssue(null);
         } else {
-          setConnectionIssue("Offshift received a plan it could not safely display.");
+          setConnectionIssue("Offshift needs a fresh dashboard session before it can safely update this plan.");
         }
       };
     },
@@ -79,6 +88,11 @@ export default function OffshiftWidget() {
 
   const runAction = async (action: ActionName) => {
     if (!app || !data) return;
+    const capability = widgetCapability.current;
+    if (!capability) {
+      setConnectionIssue("This dashboard session is no longer valid. Refresh Offshift before making a change.");
+      return;
+    }
     setStatus("working");
     setMessage(null);
 
@@ -98,15 +112,17 @@ export default function OffshiftWidget() {
               durationMinutes: data.plan.durationMinutes,
               sceneId: data.plan.sceneId,
               idempotencyKey: key,
+              widgetCapability: capability,
             }
           : action === "resume"
-            ? { idempotencyKey: key }
-            : { minutes: action === "snooze" ? 5 : 60, idempotencyKey: key },
+            ? { idempotencyKey: key, widgetCapability: capability }
+            : { minutes: action === "snooze" ? 5 : 60, idempotencyKey: key, widgetCapability: capability },
       });
       if (result.isError) throw new Error("Offshift could not complete that action.");
-      const next = dataFromToolResult(result);
+      const next = dashboardResultFromToolResult(result);
       if (!next) throw new Error("Offshift returned an incomplete break plan.");
-      setData(next);
+      widgetCapability.current = next.widgetCapability;
+      setData(next.data);
       setStatus("success");
       delete actionKeys.current[action];
       setMessage(
@@ -120,7 +136,7 @@ export default function OffshiftWidget() {
       );
     } catch {
       setStatus("error");
-      setMessage("That update did not complete. Try again; Offshift will safely reuse the same request.");
+      setMessage("That update did not complete. Retry only if this dashboard session is still current; otherwise refresh Offshift.");
     }
   };
 

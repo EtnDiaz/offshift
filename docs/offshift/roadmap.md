@@ -37,7 +37,7 @@ Use three explainable bands rather than an opaque score:
 
 1. **Routine** — dashboard shows the next break only.
 2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago; tomorrow's early start is enabled.”
-3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule sees one cancellable 30-second countdown; the companion may then invoke macOS's own Lock Screen once in that protect episode. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
+3. **Protect** — local overlay offers `Take 5`, `On call for 15 min`, or `Pause until tomorrow`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule sees one cancellable 30-second countdown; the companion may then invoke macOS's own Lock Screen once in that protect episode. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
 
 The user must see the contributing categories, change thresholds, pause until tomorrow, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
 

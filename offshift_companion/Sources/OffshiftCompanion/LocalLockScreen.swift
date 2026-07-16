@@ -26,12 +26,28 @@ final class SystemLockScreenAdapter: LocalLockAdapter {
 @MainActor
 final class LocalLockScreenSettings: ObservableObject {
     private static let enabledDefaultsKey = "localLockScreenRuleEnabled"
+    private static let cancellationCountDefaultsKey = "localLockScreenRuleCancellationCount"
+    private static let consentedSystemVersionDefaultsKey = "localLockScreenRuleConsentedSystemVersion"
 
     @Published private(set) var isEnabled: Bool
     var onSettingsChanged: (() -> Void)?
+    private let defaults: UserDefaults
+    private var consentGate: LocalLockConsentGate
 
     init(defaults: UserDefaults = .standard) {
-        isEnabled = defaults.bool(forKey: Self.enabledDefaultsKey)
+        self.defaults = defaults
+        consentGate = LocalLockConsentGate(
+            isEnabled: defaults.bool(forKey: Self.enabledDefaultsKey),
+            countdownCancellationCount: defaults.integer(forKey: Self.cancellationCountDefaultsKey)
+        )
+        if consentGate.isEnabled,
+           defaults.string(forKey: Self.consentedSystemVersionDefaultsKey) == Self.currentSystemVersion,
+           AXIsProcessTrusted() {
+        } else {
+            consentGate.disable()
+        }
+        isEnabled = consentGate.isEnabled
+        persistConsentGate()
     }
 
     var accessibilityStatus: String {
@@ -40,15 +56,54 @@ final class LocalLockScreenSettings: ObservableObject {
             : "Before a configured rule can lock, grant Offshift Accessibility permission in macOS Privacy & Security."
     }
 
-    func enableAfterLocalConfirmation() {
-        UserDefaults.standard.set(true, forKey: Self.enabledDefaultsKey)
-        isEnabled = true
+    @discardableResult
+    func enableAfterLocalConfirmation() -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        consentGate.enableAfterFreshLocalConsent()
+        isEnabled = consentGate.isEnabled
+        persistConsentGate()
+        defaults.set(Self.currentSystemVersion, forKey: Self.consentedSystemVersionDefaultsKey)
         onSettingsChanged?()
+        return true
     }
 
     func disableImmediately() {
-        UserDefaults.standard.set(false, forKey: Self.enabledDefaultsKey)
-        isEnabled = false
+        consentGate.disable()
+        isEnabled = consentGate.isEnabled
+        persistConsentGate()
         onSettingsChanged?()
+    }
+
+    /// Any permission loss invalidates stored consent. Restoring permission later
+    /// still needs a fresh Settings confirmation.
+    @discardableResult
+    func confirmFreshLocalConsentBeforeCountdown() -> Bool {
+        guard isEnabled,
+              AXIsProcessTrusted(),
+              defaults.string(forKey: Self.consentedSystemVersionDefaultsKey) == Self.currentSystemVersion
+        else {
+            if isEnabled { disableImmediately() }
+            return false
+        }
+        return true
+    }
+
+    /// Three rejected countdowns are treated as a local withdrawal of consent.
+    @discardableResult
+    func recordCountdownCancellation() -> Bool {
+        let remainsEnabled = consentGate.recordCountdownCancellation()
+        isEnabled = consentGate.isEnabled
+        persistConsentGate()
+        if !remainsEnabled { onSettingsChanged?() }
+        return remainsEnabled
+    }
+
+    private static var currentSystemVersion: String {
+        ProcessInfo.processInfo.operatingSystemVersionString
+    }
+
+    private func persistConsentGate() {
+        defaults.set(consentGate.isEnabled, forKey: Self.enabledDefaultsKey)
+        defaults.set(consentGate.countdownCancellationCount, forKey: Self.cancellationCountDefaultsKey)
     }
 }

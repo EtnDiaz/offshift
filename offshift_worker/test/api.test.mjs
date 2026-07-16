@@ -32,6 +32,32 @@ async function mcp(worker, id, method, params = {}) {
   return body.result;
 }
 
+async function mcpError(worker, id, method, params = {}) {
+  const response = await worker.fetch(request("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", "mcp-protocol-version": "2026-01-26" },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  }), {}, {});
+  assert.equal(response.status, 200);
+  const body = await responseJson(response);
+  assert.equal(body.jsonrpc, "2.0");
+  assert.equal(body.id, id);
+  assert.equal(body.result, undefined);
+  return body.error;
+}
+
+function widgetCapability(result) {
+  const capability = result?._meta?.["offshift/widgetCapability"];
+  assert.equal(typeof capability, "string");
+  assert.ok(capability.length >= 32);
+  assert.equal(result.structuredContent.widgetCapability, undefined);
+  return capability;
+}
+
+async function renderDashboard(worker, id = 1, userId = "demo-user") {
+  return mcp(worker, id, "tools/call", { name: "render_offshift_dashboard", arguments: { userId } });
+}
+
 test("health returns a stable service response", async () => {
   const response = await app().fetch(request("/health"), {}, {});
   assert.equal(response.status, 200);
@@ -39,7 +65,7 @@ test("health returns a stable service response", async () => {
     status: "ok",
     service: "offshift-demo-api",
     mcpPath: "/mcp",
-    widgetUri: "ui://widget/offshift-worker-v3.html",
+    widgetUri: "ui://widget/offshift-worker-v4.html",
   });
 });
 
@@ -163,14 +189,16 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
   });
   const render = tools.find((tool) => tool.name === "render_offshift_dashboard");
   assert.deepEqual(schedule._meta.ui.visibility, ["app"]);
-  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v3.html");
-  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v3.html");
+  assert.deepEqual(schedule.inputSchema.required, ["idempotencyKey", "widgetCapability"]);
+  assert.equal(schedule.inputSchema.properties.widgetCapability.minLength, 32);
+  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v4.html");
+  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v4.html");
   assert.equal(tools.some((tool) => /webhook|lock|command/i.test(tool.name)), false);
 });
 
 test("MCP resource read returns the React widget with a tightly scoped CSP", async () => {
   const worker = app();
-  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v3.html" });
+  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v4.html" });
   assert.equal(contents.length, 1);
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.deepEqual(contents[0]._meta.ui.csp, {
@@ -194,43 +222,104 @@ test("MCP work-pattern snapshot is explainable, shadow-only, and cannot trigger 
   assert.match(behaviour.reasons.join(" "), /aggregate active-app time/);
 });
 
-test("MCP mutation retries are idempotent and require explicit idempotency keys", async () => {
+test("MCP mutations require a dashboard capability as well as an idempotency key", async () => {
   const worker = app();
+  const dashboard = await renderDashboard(worker, 5);
+  const capability = widgetCapability(dashboard);
   const params = {
     name: "schedule_break",
-    arguments: { durationMinutes: 5, sceneId: "wind-down", idempotencyKey: "mcp-plan-0001" },
+    arguments: { durationMinutes: 5, sceneId: "wind-down", idempotencyKey: "mcp-plan-0001", widgetCapability: capability },
   };
-  const first = await mcp(worker, 5, "tools/call", params);
-  const second = await mcp(worker, 6, "tools/call", params);
+  const first = await mcp(worker, 6, "tools/call", params);
+  const second = await mcp(worker, 7, "tools/call", params);
   assert.deepEqual(second.structuredContent.plan, first.structuredContent.plan);
 
-  const invalid = await worker.fetch(request("/mcp", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "schedule_break", arguments: { durationMinutes: 5, sceneId: "wind-down" } } }),
-  }), {}, {});
-  const invalidBody = await responseJson(invalid);
-  assert.equal(invalidBody.error.code, -32602);
-  assert.match(invalidBody.error.message, /idempotencyKey is required/);
+  const missingCapability = await mcpError(worker, 8, "tools/call", {
+    name: "schedule_break",
+    arguments: { durationMinutes: 5, sceneId: "wind-down", idempotencyKey: "mcp-plan-0002" },
+  });
+  assert.equal(missingCapability.code, -32602);
+  assert.match(missingCapability.message, /widgetCapability is required/);
+
+  for (const [name, argumentsWithoutCapability] of [
+    ["snooze_break", { minutes: 5, idempotencyKey: "missing-cap-snooze-0001" }],
+    ["set_on_call_override", { minutes: 60, idempotencyKey: "missing-cap-on-call-0001" }],
+    ["resume_reminders", { idempotencyKey: "missing-cap-resume-0001" }],
+  ]) {
+    const error = await mcpError(worker, 8, "tools/call", { name, arguments: argumentsWithoutCapability });
+    assert.equal(error.code, -32602);
+    assert.match(error.message, /widgetCapability is required/);
+  }
+
+  const missingKey = await mcpError(worker, 9, "tools/call", {
+    name: "schedule_break",
+    arguments: { durationMinutes: 5, sceneId: "wind-down", widgetCapability: capability },
+  });
+  assert.equal(missingKey.code, -32602);
+  assert.match(missingKey.message, /idempotencyKey is required/);
+});
+
+test("MCP dashboard capabilities are opaque, short-lived, and isolate mutation state", async () => {
+  let now = 0;
+  let nextCapability = 1;
+  const worker = createWorker(createDemoStore(clock), undefined, {
+    now: () => now,
+    createWidgetCapability: () => `test-widget-capability-${String(nextCapability++).padStart(40, "0")}`,
+    widgetCapabilityTtlMs: 1_000,
+  });
+  const firstDashboard = await renderDashboard(worker, 10, "ada");
+  const secondDashboard = await renderDashboard(worker, 11, "bea");
+  const firstCapability = widgetCapability(firstDashboard);
+  const secondCapability = widgetCapability(secondDashboard);
+  assert.notEqual(firstCapability, secondCapability);
+
+  const firstPlan = await mcp(worker, 12, "tools/call", {
+    name: "schedule_break",
+    arguments: { durationMinutes: 7, sceneId: "wind-down", idempotencyKey: "shared-key-0001", widgetCapability: firstCapability },
+  });
+  const secondPlan = await mcp(worker, 13, "tools/call", {
+    name: "schedule_break",
+    arguments: { durationMinutes: 9, sceneId: "wind-down", idempotencyKey: "shared-key-0001", widgetCapability: secondCapability },
+  });
+  assert.equal(firstPlan.structuredContent.plan.durationMinutes, 7);
+  assert.equal(secondPlan.structuredContent.plan.durationMinutes, 9);
+  assert.equal(widgetCapability(firstPlan), firstCapability);
+  assert.equal(widgetCapability(secondPlan), secondCapability);
+
+  const invalid = await mcpError(worker, 14, "tools/call", {
+    name: "snooze_break",
+    arguments: { minutes: 5, idempotencyKey: "invalid-cap-0001", widgetCapability: "x".repeat(64) },
+  });
+  assert.equal(invalid.code, -32602);
+  assert.match(invalid.message, /invalid or expired/);
+
+  now = 1_000;
+  const expired = await mcpError(worker, 15, "tools/call", {
+    name: "resume_reminders",
+    arguments: { idempotencyKey: "expired-cap-0001", widgetCapability: firstCapability },
+  });
+  assert.equal(expired.code, -32602);
+  assert.match(expired.message, /invalid or expired/);
 });
 
 test("MCP dashboard output fits the React widget and on-call remains bounded", async () => {
   const worker = app();
-  const dashboard = await mcp(worker, 9, "tools/call", { name: "render_offshift_dashboard", arguments: {} });
+  const dashboard = await renderDashboard(worker, 16);
+  const capability = widgetCapability(dashboard);
   assert.equal(dashboard.structuredContent.snapshot.activeAppCategory, "coding");
   assert.equal(dashboard.structuredContent.plan.sceneId, "wind-down");
   assert.deepEqual(dashboard.structuredContent.allowedSceneIds, ["wind-down"]);
 
   const override = await mcp(worker, 10, "tools/call", {
     name: "set_on_call_override",
-    arguments: { minutes: 60, idempotencyKey: "on-call-0001" },
+    arguments: { minutes: 60, idempotencyKey: "on-call-0001", widgetCapability: capability },
   });
   assert.equal(override.structuredContent.plan.status, "on-call");
   assert.match(override.content[0].text, /No remote action/);
 
   const resumed = await mcp(worker, 11, "tools/call", {
     name: "resume_reminders",
-    arguments: { idempotencyKey: "resume-0001" },
+    arguments: { idempotencyKey: "resume-0001", widgetCapability: capability },
   });
   assert.equal(resumed.structuredContent.plan.status, "suggested");
 });

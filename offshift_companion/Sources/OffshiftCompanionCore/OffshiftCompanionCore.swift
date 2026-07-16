@@ -296,6 +296,21 @@ public struct QuietHoursSchedule: Equatable, Sendable {
         if startHour < endHour { return hour >= startHour && hour < endHour }
         return hour >= startHour || hour < endHour
     }
+
+    /// Returns the end of the quiet window containing `date` when possible.
+    /// For an overnight schedule, this avoids a "pause until tomorrow" that
+    /// expires one minute after the user accepts it at 23:59.
+    public func nextEnd(after date: Date, calendar: Calendar = .current) -> Date {
+        let startOfDay = calendar.startOfDay(for: date)
+        let todayEnd = calendar.date(bySettingHour: endHour, minute: 0, second: 0, of: startOfDay) ?? date
+        if startHour > endHour, date >= todayEnd {
+            return calendar.date(byAdding: .day, value: 1, to: todayEnd) ?? todayEnd
+        }
+        if startHour < endHour, date >= todayEnd {
+            return calendar.date(byAdding: .day, value: 1, to: todayEnd) ?? todayEnd
+        }
+        return todayEnd
+    }
 }
 
 /// A transparent rule set over aggregate timing. It does not infer health, fatigue, or intent.
@@ -566,6 +581,48 @@ public struct OnCallOverride: Equatable, Sendable {
     public let grantedDuration: TimeInterval
 
     public func isActive(at now: Date) -> Bool { now < expiresAt }
+}
+
+/// A local-only freshness gate for a high-impact system-lock rule. Hosts own
+/// persistence and platform permission checks; this value keeps the decision
+/// bounded and unit-testable without exposing it to MCP data.
+public struct LocalLockConsentGate: Equatable, Sendable {
+    public let maximumCountdownCancellations: Int
+    public private(set) var isEnabled: Bool
+    public private(set) var countdownCancellationCount: Int
+
+    public init(
+        isEnabled: Bool = false,
+        countdownCancellationCount: Int = 0,
+        maximumCountdownCancellations: Int = 3
+    ) {
+        precondition(maximumCountdownCancellations > 0)
+        self.maximumCountdownCancellations = maximumCountdownCancellations
+        self.isEnabled = isEnabled
+        self.countdownCancellationCount = max(0, countdownCancellationCount)
+    }
+
+    public mutating func enableAfterFreshLocalConsent() {
+        isEnabled = true
+        countdownCancellationCount = 0
+    }
+
+    public mutating func disable() {
+        isEnabled = false
+        countdownCancellationCount = 0
+    }
+
+    /// Returns whether the rule remains enabled after this cancellation.
+    @discardableResult
+    public mutating func recordCountdownCancellation() -> Bool {
+        guard isEnabled else { return false }
+        countdownCancellationCount += 1
+        if countdownCancellationCount >= maximumCountdownCancellations {
+            disable()
+            return false
+        }
+        return true
+    }
 }
 
 public struct LockRequest: Equatable, Sendable {

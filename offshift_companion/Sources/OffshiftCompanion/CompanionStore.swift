@@ -27,6 +27,7 @@ final class CompanionStore: ObservableObject {
     private let sampler = MacActivitySampler()
     private let defaults: UserDefaults
     private var countdownTimer: Timer?
+    private var overrideExpiryTimer: Timer?
     private var hasStartedCountdownForProtectEpisode = false
     let homeAssistantSettings = HomeAssistantSettings()
     let lockScreenSettings = LocalLockScreenSettings()
@@ -78,6 +79,14 @@ final class CompanionStore: ObservableObject {
         }
     }
 
+    var pauseActionLabel: String {
+        guard nightCareSettings.isEnabled,
+              nightCareSettings.schedule.startHour > nightCareSettings.schedule.endHour,
+              nightCareSettings.isInsideQuietHours()
+        else { return "Pause until tomorrow" }
+        return "Pause until \(NightCareSettings.hourLabel(nightCareSettings.schedule.endHour))"
+    }
+
     var careHeadline: String {
         nightCareSettings.isInsideQuietHours()
             ? "The shift can end here"
@@ -94,7 +103,8 @@ final class CompanionStore: ObservableObject {
 
     var careReason: String {
         if nightCareSettings.isInsideQuietHours() {
-            return "Why now: sustained local activity during your \(NightCareSettings.hourLabel(nightCareSettings.startHour))–\(NightCareSettings.hourLabel(nightCareSettings.endHour)) quiet hours."
+            let earlyStart = nightCareSettings.hasEarlyStartTomorrow ? " You also marked an early start tomorrow." : ""
+            return "Why now: sustained local activity during your \(NightCareSettings.hourLabel(nightCareSettings.startHour))–\(NightCareSettings.hourLabel(nightCareSettings.endHour)) quiet hours.\(earlyStart)"
         }
         return "Why now: sustained local aggregate activity reached your protection threshold."
     }
@@ -132,7 +142,7 @@ final class CompanionStore: ObservableObject {
     }
 
     func takeFive() {
-        apply(state: .routine, reasons: [.belowDriftThreshold])
+        sampler.resetActivityWindow()
         countdownText = "Take five. Offshift will check local aggregate activity again when you return."
     }
 
@@ -141,8 +151,8 @@ final class CompanionStore: ObservableObject {
             countdownText = localControlSummary
             return
         }
-        guard lockRuleEnabled else {
-            countdownText = "The local Lock Screen rule is disabled. Enable it locally in Settings first."
+        guard lockScreenSettings.confirmFreshLocalConsentBeforeCountdown() else {
+            countdownText = "The local Lock Screen rule needs fresh local consent and Accessibility permission in Settings."
             return
         }
         guard controller.startPreLockCountdown(at: .now, duration: lockCountdownDuration) else { return }
@@ -155,7 +165,11 @@ final class CompanionStore: ObservableObject {
         guard controller.cancelPreLockCountdown(at: .now) else { return }
         hasStartedCountdownForProtectEpisode = true
         stopCountdownTimer()
-        countdownText = "Countdown cancelled. The current protect episode will not start another countdown."
+        if lockScreenSettings.recordCountdownCancellation() {
+            countdownText = "Countdown cancelled. The current protect episode will not start another countdown."
+        } else {
+            countdownText = "Countdown cancelled repeatedly. The local Lock Screen rule was turned off and needs fresh local consent."
+        }
     }
 
     func grantOnCallOverride() {
@@ -167,6 +181,7 @@ final class CompanionStore: ObservableObject {
         case let .granted(override):
             hasStartedCountdownForProtectEpisode = true
             stopCountdownTimer()
+            scheduleOverrideExpiry(at: override.expiresAt)
             onCallMessage = "On-call override ends at \(override.expiresAt.formatted(date: .omitted, time: .shortened))."
         case let .rejected(reason):
             onCallMessage = reason
@@ -175,12 +190,13 @@ final class CompanionStore: ObservableObject {
 
     func pauseUntilTomorrow() {
         let now = Date.now
-        let tomorrow = Calendar.current.date(
-            byAdding: .day,
-            value: 1,
-            to: Calendar.current.startOfDay(for: now)
-        )!
-        guard localControl.pause(until: tomorrow, at: now) else { return }
+        let pauseEnd: Date
+        if nightCareSettings.isEnabled, nightCareSettings.schedule.startHour > nightCareSettings.schedule.endHour {
+            pauseEnd = nightCareSettings.schedule.nextEnd(after: now)
+        } else {
+            pauseEnd = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))!
+        }
+        guard localControl.pause(until: pauseEnd, at: now) else { return }
         persistLocalControl()
         suppressLocalInterventions(message: "Offshift is paused until tomorrow. No local countdown, Lock Screen request, or scene can start while paused.")
     }
@@ -230,7 +246,10 @@ final class CompanionStore: ObservableObject {
         persistLocalControl()
         apply(riskPolicy.assess(
             intervals,
-            context: WorkPatternRiskContext(isInsideQuietHours: nightCareSettings.isInsideQuietHours()),
+            context: WorkPatternRiskContext(
+                isInsideQuietHours: nightCareSettings.isInsideQuietHours(),
+                hasNextDayEarlyStartConfigured: nightCareSettings.hasEarlyStartTomorrow
+            ),
             at: .now
         ))
         samplingStatus = "Sampling aggregate active time locally. No content leaves this Mac."
@@ -254,6 +273,7 @@ final class CompanionStore: ObservableObject {
         if assessment.state != .protect {
             hasStartedCountdownForProtectEpisode = false
             stopCountdownTimer()
+            stopOverrideExpiryTimer()
             countdownText = "No countdown running"
         } else if !wasProtect {
             hasStartedCountdownForProtectEpisode = false
@@ -301,6 +321,7 @@ final class CompanionStore: ObservableObject {
         )
         hasStartedCountdownForProtectEpisode = true
         stopCountdownTimer()
+        stopOverrideExpiryTimer()
         countdownText = "No countdown running"
         onCallMessage = nil
         samplingStatus = message
@@ -337,6 +358,10 @@ final class CompanionStore: ObservableObject {
 
     private func maybeStartAutomaticCountdown() {
         guard assessment.state == .protect, lockRuleEnabled, !hasStartedCountdownForProtectEpisode else { return }
+        guard lockScreenSettings.confirmFreshLocalConsentBeforeCountdown() else {
+            countdownText = "The local Lock Screen rule needs fresh local consent and Accessibility permission in Settings."
+            return
+        }
         startPreLockCountdown()
     }
 
@@ -352,6 +377,33 @@ final class CompanionStore: ObservableObject {
     private func stopCountdownTimer() {
         countdownTimer?.invalidate()
         countdownTimer = nil
+    }
+
+    private func scheduleOverrideExpiry(at deadline: Date) {
+        stopOverrideExpiryTimer()
+        overrideExpiryTimer = Timer.scheduledTimer(withTimeInterval: max(0.1, deadline.timeIntervalSinceNow), repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleOverrideExpiry()
+            }
+        }
+    }
+
+    private func stopOverrideExpiryTimer() {
+        overrideExpiryTimer?.invalidate()
+        overrideExpiryTimer = nil
+    }
+
+    private func handleOverrideExpiry() {
+        _ = controller.tick(at: .now)
+        stopOverrideExpiryTimer()
+        guard controller.activeOverride == nil,
+              assessment.state == .protect,
+              localControl.permitsIntervention(at: .now)
+        else { return }
+        onCallMessage = "Your on-call override ended. Choose what you need next."
+        countdownText = "On-call override ended. No new Lock Screen countdown starts automatically."
+        protectionPresentationToken &+= 1
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func tickCountdown() {

@@ -153,6 +153,37 @@ final class QuietHoursScheduleTests: XCTestCase {
         XCTAssertTrue(schedule.contains(hour: 16))
         XCTAssertFalse(schedule.contains(hour: 17))
     }
+
+    func testOvernightQuietHoursEndOnTheFollowingMorningAtLateEvening() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2026, month: 7, day: 17, hour: 23, minute: 59))!
+        let end = QuietHoursSchedule(startHour: 23, endHour: 7).nextEnd(after: date, calendar: calendar)
+
+        XCTAssertEqual(calendar.component(.day, from: end), 18)
+        XCTAssertEqual(calendar.component(.hour, from: end), 7)
+    }
+}
+
+final class LocalLockConsentGateTests: XCTestCase {
+    func testFreshConsentEnablesAndResetsCancellationCount() {
+        var gate = LocalLockConsentGate(isEnabled: true, countdownCancellationCount: 2)
+
+        gate.enableAfterFreshLocalConsent()
+
+        XCTAssertTrue(gate.isEnabled)
+        XCTAssertEqual(gate.countdownCancellationCount, 0)
+    }
+
+    func testThirdCountdownCancellationFailsClosed() {
+        var gate = LocalLockConsentGate(maximumCountdownCancellations: 3)
+        gate.enableAfterFreshLocalConsent()
+
+        XCTAssertTrue(gate.recordCountdownCancellation())
+        XCTAssertTrue(gate.recordCountdownCancellation())
+        XCTAssertFalse(gate.recordCountdownCancellation())
+        XCTAssertFalse(gate.isEnabled)
+        XCTAssertEqual(gate.countdownCancellationCount, 0)
+    }
 }
 
 final class HomeAssistantWindDownTests: XCTestCase {
@@ -313,6 +344,20 @@ final class InterventionControllerTests: XCTestCase {
             controller.grantOnCallOverride(requestedDuration: 30, at: now.addingTimeInterval(1)),
             .rejected(reason: "Override grant limit reached for this protect episode.")
         )
+    }
+
+    func testExpiredOnCallOverrideStopsSuppressingTheProtectEpisode() {
+        let controller = InterventionController(
+            overridePolicy: OnCallOverridePolicy(maximumDuration: 60, maximumGrantsPerProtectEpisode: 1)
+        )
+        controller.apply(protectAssessment(), at: now)
+        guard case .granted = controller.grantOnCallOverride(requestedDuration: 60, at: now) else {
+            return XCTFail("Expected a granted override")
+        }
+
+        XCTAssertNotNil(controller.activeOverride)
+        XCTAssertEqual(controller.tick(at: now.addingTimeInterval(60)), .noCountdown)
+        XCTAssertNil(controller.activeOverride)
     }
 
     func testReturningToRoutineCancelsCountdownAndResetsIntervention() {

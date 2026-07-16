@@ -15,3 +15,5 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0009](0009-widget-is-the-mutation-consent-surface.md) | Keep ChatGPT mutations behind an explicit widget action and make overrides reversible. | Accepted |
 | [0010](0010-local-pause-and-disable-gate.md) | Keep pause/off authority inside the local companion. | Accepted |
 | [0011](0011-local-night-care-overlay.md) | Bring a local protection window forward after opted-in quiet-hours Protect. | Accepted |
+| [0012](0012-fail-closed-local-lock-consent.md) | Require fresh local consent for the optional Lock Screen rule. | Accepted |
+| [0013](0013-worker-dashboard-capability.md) | Server-verify a short-lived capability before Worker plan mutations. | Accepted |

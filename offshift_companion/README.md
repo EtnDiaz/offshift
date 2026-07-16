@@ -1,6 +1,6 @@
 # Offshift macOS companion core
 
-This SwiftPM package contains the local decision core for the future macOS companion. It deliberately accepts only aggregate active-application intervals with opaque identifiers. It does not inspect source code or screen contents, request permissions, make network calls, diagnose a person, or contain a real screen-lock implementation.
+This SwiftPM package contains the local decision core and macOS companion host. It deliberately accepts only aggregate active-application intervals with opaque identifiers. It does not inspect source code or screen contents, diagnose a person, or make any remote decision about a lock or device action.
 
 ## Behaviour
 
@@ -12,7 +12,7 @@ This SwiftPM package contains the local decision core for the future macOS compa
 - `NeverLockingTestAdapter` remains the default core adapter. The macOS host has a separately opt-in system adapter that posts Control-Command-Q only after local Settings confirmation and macOS Accessibility permission; tests never invoke it.
 - `InMemoryShadowModeLog` is suitable for tests; `LocalShadowModeLog` appends JSON-lines to a caller-selected local file.
 
-The included macOS host is a menu-bar and window-based fixture over the core. It samples aggregate local active/idle time once per minute using only elapsed durations, then feeds opaque `active-session` intervals into the heuristic. It makes routine/drift/protect state, the cancellable intervention window, and bounded on-call behaviour visible. Its Lock Screen control is deliberately disabled and no real adapter ships in this build.
+The included macOS host is a menu-bar and window-based companion. It samples aggregate local active/idle time once per minute using only elapsed durations, then feeds opaque `active-session` intervals into the heuristic. It makes routine/drift/protect state, the cancellable intervention window, and bounded on-call behaviour visible. Night care is a local, opt-in 23:00–07:00 schedule by default; it adds context only after sustained activity and brings the protection window forward on a Protect transition. Its Lock Screen control is disabled by default. After explicit local confirmation and macOS Accessibility permission, the separate system adapter can post Control-Command-Q after a visible cancellable countdown; tests never invoke that adapter.
 
 The companion also supports exactly one locally configured Home Assistant scene: `wind-down`, mapped to `scene.offshift_wind_down`. The base URL is stored locally, the long-lived token is stored in the macOS Keychain, and every call requires the local confirmation dialog. A rejected token, missing scene, or unavailable host produces an explanatory local result and is never retried automatically.
 
@@ -28,4 +28,4 @@ swift test
 
 ## Coordination handoff
 
-Scope: `offshift_companion/**` only, on branch `agent/codex/150-offshift-mvp`. The required coordination issue is `tixo-digital/program#150`; this checkout cannot resolve that repository through GitHub CLI, so a remote claim/update could not be recorded from this environment. The implementation is self-contained and the test command above is the verification handoff.
+Scope: `offshift_companion/**` only, on branch `agent/codex/150-offshift-mvp`. The required coordination issue is `tixo-digital/program#150`; material scope and verification updates are recorded there. The implementation is self-contained and the test command above is the verification handoff.

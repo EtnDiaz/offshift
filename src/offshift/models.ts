@@ -5,6 +5,8 @@ export const OFFSHIFT_TOOLS = {
   resumeReminders: "resume_reminders",
 } as const;
 
+export const OFFSHIFT_WIDGET_CAPABILITY_META_KEY = "offshift/widgetCapability";
+
 export interface FocusSnapshot {
   activeAppCategory: "coding";
   focusMinutes: number;
@@ -108,4 +110,10 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
       ? value.allowedSceneIds.filter((scene): scene is string => typeof scene === "string")
       : [],
   };
+}
+
+export function widgetCapabilityFromToolResult(value: unknown): string | null {
+  if (!isRecord(value) || !isRecord(value._meta)) return null;
+  const capability = value._meta[OFFSHIFT_WIDGET_CAPABILITY_META_KEY];
+  return typeof capability === "string" && capability.length >= 32 && capability.length <= 128 ? capability : null;
 }

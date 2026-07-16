@@ -5,6 +5,7 @@ import OffshiftCompanionCore
 /// A local-only sampler. It records no keystrokes, app titles, prompts, code, or window data.
 @MainActor
 final class MacActivitySampler {
+    private let maximumAcceptedSampleDuration: TimeInterval = 90
     var onIntervalsChanged: (([ActiveAppInterval]) -> Void)?
     private(set) var isSampling = false
     private var intervals: [ActiveAppInterval] = []
@@ -26,8 +27,19 @@ final class MacActivitySampler {
         isSampling = false
     }
 
+    /// Accepting a break starts a new local activity window. The old aggregate
+    /// durations must not immediately re-open Protect on the next minute tick.
+    func resetActivityWindow(at now: Date = .now) {
+        intervals.removeAll()
+        lastSampleAt = now
+        onIntervalsChanged?(intervals)
+    }
+
     func sampleNow(at now: Date = .now, idleDuration: TimeInterval? = nil) {
-        let sampleDuration = now.timeIntervalSince(lastSampleAt)
+        let elapsedSinceLastSample = max(0, now.timeIntervalSince(lastSampleAt))
+        // Sleep/wake, a stalled run loop, or a debugger pause must not turn an
+        // arbitrarily long gap into one active interval and a false Protect.
+        let sampleDuration = min(elapsedSinceLastSample, maximumAcceptedSampleDuration)
         lastSampleAt = now
         // CoreGraphics exposes the C API's any-input sentinel as a raw event type.
         // It yields only elapsed idle seconds, not the underlying input events.

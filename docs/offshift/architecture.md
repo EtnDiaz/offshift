@@ -8,7 +8,8 @@ ChatGPT model
   -> Apps SDK widget (Offshift dashboard)
 
 Cloudflare Worker
-  -> schedule/focus API and future D1 persistence
+  -> public HTTPS MCP demo host and schedule/focus API
+  -> future D1 persistence only when a non-demo product requirement exists
 
 macOS companion
   -> aggregate active-app timing
@@ -26,9 +27,9 @@ The ChatGPT App is the planner and dashboard. A local companion owns desktop not
 
 `offshift_server_node` serves `/mcp` through a local Node process. The widget is bundled into a self-contained MCP resource so the ChatGPT iframe does not depend on external asset loading.
 
-### Cloudflare preview
+### Cloudflare Worker demo host
 
-`offshift_worker` provides a Worker-compatible API surface. The Worker will become the stable MCP host after the initial local resource path is verified. D1 persistence, device registration, and scheduled jobs belong to this stage.
+`offshift_worker` is the public HTTPS MCP demo host at `https://offshift-demo-api.tixo-digital.workers.dev/mcp`. It serves the versioned `ui://widget/offshift-worker-v4.html` React resource. Rendering mints a short-lived, opaque dashboard capability in result metadata; the Worker validates it before each bounded plan mutation and keeps plan/idempotency state scoped to that in-memory capability session. This is intentionally non-durable demo data, not identity or device authority. D1 persistence, device registration, and scheduled jobs are not part of the MVP and would require a new product decision.
 
 ### Local companion
 

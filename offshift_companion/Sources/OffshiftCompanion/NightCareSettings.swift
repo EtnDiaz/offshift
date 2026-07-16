@@ -8,10 +8,12 @@ final class NightCareSettings: ObservableObject {
     private static let enabledKey = "offshift.nightCare.enabled"
     private static let startHourKey = "offshift.nightCare.startHour"
     private static let endHourKey = "offshift.nightCare.endHour"
+    private static let earlyStartTomorrowKey = "offshift.nightCare.earlyStartTomorrow"
 
     @Published private(set) var isEnabled: Bool
     @Published private(set) var startHour: Int
     @Published private(set) var endHour: Int
+    @Published private(set) var hasEarlyStartTomorrow: Bool
     var onSettingsChanged: (() -> Void)?
 
     private let defaults: UserDefaults
@@ -33,6 +35,7 @@ final class NightCareSettings: ObservableObject {
         } else {
             endHour = 7
         }
+        hasEarlyStartTomorrow = defaults.bool(forKey: Self.earlyStartTomorrowKey)
     }
 
     var schedule: QuietHoursSchedule {
@@ -65,6 +68,12 @@ final class NightCareSettings: ObservableObject {
         guard (0..<24).contains(hour), hour != startHour else { return }
         endHour = hour
         defaults.set(hour, forKey: Self.endHourKey)
+        onSettingsChanged?()
+    }
+
+    func setEarlyStartTomorrow(_ enabled: Bool) {
+        hasEarlyStartTomorrow = enabled
+        defaults.set(enabled, forKey: Self.earlyStartTomorrowKey)
         onSettingsChanged?()
     }
 

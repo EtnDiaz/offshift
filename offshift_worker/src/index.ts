@@ -10,11 +10,13 @@ const MAX_SNOOZE_MINUTES = 60;
 const MIN_BREAK_DURATION_MINUTES = 1;
 const MAX_BREAK_DURATION_MINUTES = 30;
 const MCP_PROTOCOL_VERSION = "2026-01-26";
-const MCP_SERVER_VERSION = "0.4.0";
-const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v3.html";
+const MCP_SERVER_VERSION = "0.5.0";
+const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v4.html";
 const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
 const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
+const WIDGET_CAPABILITY_TTL_MS = 5 * 60_000;
+const WIDGET_CAPABILITY_META_KEY = "offshift/widgetCapability";
 
 const DATA_TOOL_META = { ui: { visibility: ["model"] } };
 const INTERACTIVE_TOOL_META = { ui: { visibility: ["app"] } };
@@ -53,6 +55,25 @@ interface DashboardState {
   currentPlan: DashboardPlan | null;
   idempotencyResults: Map<string, DashboardPlan>;
   nextPlanNumber: number;
+}
+
+interface DashboardSession {
+  capability: string;
+  expiresAt: number;
+  userId: string;
+  state: DashboardState;
+}
+
+interface WorkerOptions {
+  now?: () => number;
+  createWidgetCapability?: () => string;
+  widgetCapabilityTtlMs?: number;
+}
+
+interface WorkerDependencies {
+  now: () => number;
+  createWidgetCapability: () => string;
+  widgetCapabilityTtlMs: number;
 }
 
 function widgetHtml(assetOrigin: string): string {
@@ -105,12 +126,13 @@ const MCP_TOOLS = [
     description: "Use this only when the user explicitly chooses a 1–30 minute Offshift break and the allowlisted wind-down scene.",
     inputSchema: {
       type: "object",
-      required: ["idempotencyKey"],
+      required: ["idempotencyKey", "widgetCapability"],
       additionalProperties: false,
       properties: {
         durationMinutes: { type: "integer", minimum: MIN_BREAK_DURATION_MINUTES, maximum: MAX_BREAK_DURATION_MINUTES },
         sceneId: { type: "string", enum: [ALLOWED_SCENE_ID] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
+        widgetCapability: widgetCapabilitySchema(),
       },
     },
     outputSchema: dashboardOutputSchema(),
@@ -123,9 +145,12 @@ const MCP_TOOLS = [
     description: "Use this only when the user explicitly ends their on-call override and resumes normal Offshift reminders.",
     inputSchema: {
       type: "object",
-      required: ["idempotencyKey"],
+      required: ["idempotencyKey", "widgetCapability"],
       additionalProperties: false,
-      properties: { idempotencyKey: { type: "string", minLength: 8, maxLength: 128 } },
+      properties: {
+        idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
+        widgetCapability: widgetCapabilitySchema(),
+      },
     },
     outputSchema: dashboardOutputSchema(),
     annotations: MUTATION_ANNOTATIONS,
@@ -137,11 +162,12 @@ const MCP_TOOLS = [
     description: "Use this only when the user explicitly postpones their current Offshift break by 5–15 minutes.",
     inputSchema: {
       type: "object",
-      required: ["minutes", "idempotencyKey"],
+      required: ["minutes", "idempotencyKey", "widgetCapability"],
       additionalProperties: false,
       properties: {
         minutes: { type: "integer", minimum: MIN_SNOOZE_MINUTES, maximum: 15 },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
+        widgetCapability: widgetCapabilitySchema(),
       },
     },
     outputSchema: dashboardOutputSchema(),
@@ -154,11 +180,12 @@ const MCP_TOOLS = [
     description: "Use this when the user explicitly needs a bounded 15–120 minute on-call period before Offshift resumes its normal reminder cadence.",
     inputSchema: {
       type: "object",
-      required: ["idempotencyKey"],
+      required: ["idempotencyKey", "widgetCapability"],
       additionalProperties: false,
       properties: {
         minutes: { type: "integer", minimum: 15, maximum: 120 },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
+        widgetCapability: widgetCapabilitySchema(),
       },
     },
     outputSchema: dashboardOutputSchema(),
@@ -190,14 +217,23 @@ const MCP_TOOLS = [
   },
 ] as const;
 
-export function createWorker(store: DemoStore = createDemoStore(), widgetAssetOrigin = WIDGET_ASSET_ORIGIN): WorkerHandler {
-  const dashboardState: DashboardState = { currentPlan: null, idempotencyResults: new Map(), nextPlanNumber: 1 };
+export function createWorker(
+  store: DemoStore = createDemoStore(),
+  widgetAssetOrigin = WIDGET_ASSET_ORIGIN,
+  options: WorkerOptions = {},
+): WorkerHandler {
+  const dashboardSessions = new Map<string, DashboardSession>();
+  const dependencies: WorkerDependencies = {
+    now: options.now ?? Date.now,
+    createWidgetCapability: options.createWidgetCapability ?? createOpaqueWidgetCapability,
+    widgetCapabilityTtlMs: options.widgetCapabilityTtlMs ?? WIDGET_CAPABILITY_TTL_MS,
+  };
   return {
     async fetch(request, env): Promise<Response> {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 
       try {
-        return await route(request, store, dashboardState, widgetAssetOrigin, env as WorkerEnvironment);
+        return await route(request, store, dashboardSessions, widgetAssetOrigin, dependencies, env as WorkerEnvironment);
       } catch (error) {
         if (error instanceof ApiError) return json({ error: error.message }, error.status);
         return json({ error: "Internal server error" }, 500);
@@ -212,8 +248,9 @@ export default worker;
 async function route(
   request: Request,
   store: DemoStore,
-  dashboardState: DashboardState,
+  dashboardSessions: Map<string, DashboardSession>,
   widgetAssetOrigin: string,
+  dependencies: WorkerDependencies,
   env: WorkerEnvironment,
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -228,7 +265,7 @@ async function route(
 
   if (url.pathname === "/mcp") {
     if (request.method !== "POST") throw new ApiError(405, "MCP requests must use POST");
-    return handleMcpRequest(request, store, dashboardState, widgetAssetOrigin);
+    return handleMcpRequest(request, store, dashboardSessions, widgetAssetOrigin, dependencies);
   }
 
   if (request.method === "GET" && url.pathname === "/v1/focus/snapshot") {
@@ -272,8 +309,9 @@ async function route(
 async function handleMcpRequest(
   request: Request,
   store: DemoStore,
-  dashboardState: DashboardState,
+  dashboardSessions: Map<string, DashboardSession>,
   widgetAssetOrigin: string,
+  dependencies: WorkerDependencies,
 ): Promise<Response> {
   const message = await readJson(request);
   if (message.jsonrpc !== "2.0" || typeof message.method !== "string") {
@@ -284,7 +322,7 @@ async function handleMcpRequest(
   if (message.method === "notifications/initialized") return new Response(null, { status: 202, headers: corsHeaders() });
 
   try {
-    const result = handleMcpMethod(message.method, recordOrEmpty(message.params), store, dashboardState, widgetAssetOrigin);
+    const result = handleMcpMethod(message.method, recordOrEmpty(message.params), store, dashboardSessions, widgetAssetOrigin, dependencies);
     return mcpResult(id, result);
   } catch (error) {
     if (error instanceof ApiError) return mcpError(id, -32602, error.message);
@@ -297,8 +335,9 @@ function handleMcpMethod(
   method: string,
   params: Record<string, unknown>,
   store: DemoStore,
-  dashboardState: DashboardState,
+  dashboardSessions: Map<string, DashboardSession>,
   widgetAssetOrigin: string,
+  dependencies: WorkerDependencies,
 ): unknown {
   if (method === "initialize") {
     return {
@@ -332,69 +371,83 @@ function handleMcpMethod(
       }],
     };
   }
-  if (method === "tools/call") return callMcpTool(params, store, dashboardState);
+  if (method === "tools/call") return callMcpTool(params, store, dashboardSessions, dependencies);
   throw new McpMethodError(-32601, `MCP method not found: ${method}`);
 }
 
-function callMcpTool(params: Record<string, unknown>, store: DemoStore, dashboardState: DashboardState): unknown {
+function callMcpTool(
+  params: Record<string, unknown>,
+  store: DemoStore,
+  dashboardSessions: Map<string, DashboardSession>,
+  dependencies: WorkerDependencies,
+): unknown {
   if (typeof params.name !== "string") throw new ApiError(400, "MCP tool name must be a string");
   const args = recordOrEmpty(params.arguments);
 
   if (params.name === "get_focus_snapshot") {
-    const snapshot = dashboardData(store, dashboardState, readUserId(args.userId)).snapshot;
+    const snapshot = dashboardData(store, readUserId(args.userId), previewDashboardPlan(5, ALLOWED_SCENE_ID)).snapshot;
     return toolResult({ snapshot }, "Here is the aggregate focus snapshot. It does not contain app, screen, or source-code content.");
   }
   if (params.name === "get_work_pattern_snapshot") {
-    const behaviour = dashboardData(store, dashboardState, readUserId(args.userId)).behaviour;
+    const behaviour = dashboardData(store, readUserId(args.userId), previewDashboardPlan(5, ALLOWED_SCENE_ID)).behaviour;
     return toolResult({ behaviour }, "Here is the explainable shadow-mode work-pattern snapshot. The Worker cannot perform a remote action.");
   }
   if (params.name === "preview_break_plan") {
     const plan = previewDashboardPlan(readDuration(args.durationMinutes), readSceneId(args.sceneId));
-    return dashboardToolResult(store, dashboardState, plan, "Previewing the allowlisted wind-down plan. No schedule changed.");
+    return dashboardToolResult(store, readUserId(args.userId), plan, "Previewing the allowlisted wind-down plan. No schedule changed.");
   }
   if (params.name === "schedule_break") {
+    const session = requireDashboardSession(args.widgetCapability, dashboardSessions, dependencies.now);
     const key = `schedule:${readIdempotencyKey(args.idempotencyKey, true)}`;
-    const previous = dashboardState.idempotencyResults.get(key);
-    const plan = previous ?? scheduledDashboardPlan(dashboardState, readDuration(args.durationMinutes), readSceneId(args.sceneId));
-    dashboardState.idempotencyResults.set(key, plan);
-    return dashboardToolResult(store, dashboardState, plan, "A five-minute reset is prepared. Open the local companion to choose any local reminder, scene, or lock action.");
+    const previous = session.state.idempotencyResults.get(key);
+    const plan = previous ?? scheduledDashboardPlan(session.state, readDuration(args.durationMinutes), readSceneId(args.sceneId));
+    session.state.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, session.userId, plan, "A five-minute reset is prepared. Open the local companion to choose any local reminder, scene, or lock action.", session.capability);
   }
   if (params.name === "snooze_break") {
+    const session = requireDashboardSession(args.widgetCapability, dashboardSessions, dependencies.now);
     const key = `snooze:${readIdempotencyKey(args.idempotencyKey, true)}`;
-    const previous = dashboardState.idempotencyResults.get(key);
-    const plan = previous ?? snoozedDashboardPlan(dashboardState, readBoundedInteger(args.minutes, "minutes", MIN_SNOOZE_MINUTES, 15));
-    dashboardState.idempotencyResults.set(key, plan);
-    return dashboardToolResult(store, dashboardState, plan, "Break reminder snoozed for a bounded interval. No remote action was taken.");
+    const previous = session.state.idempotencyResults.get(key);
+    const plan = previous ?? snoozedDashboardPlan(session.state, readBoundedInteger(args.minutes, "minutes", MIN_SNOOZE_MINUTES, 15));
+    session.state.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, session.userId, plan, "Break reminder snoozed for a bounded interval. No remote action was taken.", session.capability);
   }
   if (params.name === "set_on_call_override") {
+    const session = requireDashboardSession(args.widgetCapability, dashboardSessions, dependencies.now);
     const key = `on-call:${readIdempotencyKey(args.idempotencyKey, true)}`;
-    const previous = dashboardState.idempotencyResults.get(key);
-    const plan = previous ?? onCallDashboardPlan(dashboardState, readBoundedInteger(args.minutes, "minutes", 15, 120));
-    dashboardState.idempotencyResults.set(key, plan);
-    return dashboardToolResult(store, dashboardState, plan, "On-call override is active for a bounded period. No remote action was taken.");
+    const previous = session.state.idempotencyResults.get(key);
+    const plan = previous ?? onCallDashboardPlan(session.state, readBoundedInteger(args.minutes, "minutes", 15, 120));
+    session.state.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, session.userId, plan, "On-call override is active for a bounded period. No remote action was taken.", session.capability);
   }
   if (params.name === "resume_reminders") {
+    const session = requireDashboardSession(args.widgetCapability, dashboardSessions, dependencies.now);
     const key = `resume:${readIdempotencyKey(args.idempotencyKey, true)}`;
-    const previous = dashboardState.idempotencyResults.get(key);
-    const plan = previous ?? resumedDashboardPlan(dashboardState);
-    dashboardState.idempotencyResults.set(key, plan);
-    return dashboardToolResult(store, dashboardState, plan, "Reminders are back on. No remote action was taken.");
+    const previous = session.state.idempotencyResults.get(key);
+    const plan = previous ?? resumedDashboardPlan(session.state);
+    session.state.idempotencyResults.set(key, plan);
+    return dashboardToolResult(store, session.userId, plan, "Reminders are back on. No remote action was taken.", session.capability);
   }
   if (params.name === "render_offshift_dashboard") {
-    return dashboardToolResult(store, dashboardState, dashboardState.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID), "Showing the Offshift dashboard with its local-only safety boundary.", readUserId(args.userId));
+    const session = mintDashboardSession(dashboardSessions, readUserId(args.userId), dependencies);
+    return dashboardToolResult(store, session.userId, previewDashboardPlan(5, ALLOWED_SCENE_ID), "Showing the Offshift dashboard with its local-only safety boundary.", session.capability);
   }
   throw new McpMethodError(-32602, `Unknown Offshift tool: ${params.name}`);
 }
 
-function toolResult(structuredContent: unknown, text: string): Record<string, unknown> {
-  return { structuredContent, content: [{ type: "text", text }] };
+function toolResult(structuredContent: unknown, text: string, meta?: Record<string, unknown>): Record<string, unknown> {
+  return { structuredContent, content: [{ type: "text", text }], ...(meta ? { _meta: meta } : {}) };
 }
 
-function dashboardToolResult(store: DemoStore, dashboardState: DashboardState, plan: DashboardPlan, text: string, userId = DEFAULT_USER_ID): Record<string, unknown> {
-  return toolResult(dashboardData(store, dashboardState, userId, plan), text);
+function dashboardToolResult(store: DemoStore, userId: string, plan: DashboardPlan, text: string, widgetCapability?: string): Record<string, unknown> {
+  return toolResult(
+    dashboardData(store, userId, plan),
+    text,
+    widgetCapability ? { [WIDGET_CAPABILITY_META_KEY]: widgetCapability } : undefined,
+  );
 }
 
-function dashboardData(store: DemoStore, dashboardState: DashboardState, userId: string, plan = dashboardState.currentPlan ?? previewDashboardPlan(5, ALLOWED_SCENE_ID)) {
+function dashboardData(store: DemoStore, userId: string, plan: DashboardPlan) {
   const focus = store.getFocusSnapshot(userId);
   const behavior = store.getBehaviorSnapshot(userId);
   return {
@@ -464,6 +517,47 @@ function resumedDashboardPlan(state: DashboardState): DashboardPlan {
   return plan;
 }
 
+function mintDashboardSession(
+  sessions: Map<string, DashboardSession>,
+  userId: string,
+  dependencies: WorkerDependencies,
+): DashboardSession {
+  const now = dependencies.now();
+  for (const [capability, session] of sessions) {
+    if (session.expiresAt <= now) sessions.delete(capability);
+  }
+
+  const capability = dependencies.createWidgetCapability();
+  const session: DashboardSession = {
+    capability,
+    expiresAt: now + dependencies.widgetCapabilityTtlMs,
+    userId,
+    state: { currentPlan: null, idempotencyResults: new Map(), nextPlanNumber: 1 },
+  };
+  sessions.set(capability, session);
+  return session;
+}
+
+function requireDashboardSession(
+  value: unknown,
+  sessions: Map<string, DashboardSession>,
+  now: () => number,
+): DashboardSession {
+  const capability = readWidgetCapability(value);
+  const session = sessions.get(capability);
+  if (!session || session.expiresAt <= now()) {
+    sessions.delete(capability);
+    throw new ApiError(403, "widgetCapability is invalid or expired");
+  }
+  return session;
+}
+
+function createOpaqueWidgetCapability(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function readJson(request: Request): Promise<Record<string, unknown>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) throw new ApiError(415, "Content-Type must be application/json");
@@ -506,6 +600,14 @@ function readIdempotencyKey(value: unknown, required: boolean): string | undefin
   return value;
 }
 
+function readWidgetCapability(value: unknown): string {
+  if (value === undefined || value === null) throw new ApiError(400, "widgetCapability is required");
+  if (typeof value !== "string" || value.length < 32 || value.length > 128) {
+    throw new ApiError(400, "widgetCapability must be an opaque 32-128 character value");
+  }
+  return value;
+}
+
 function readBoundedInteger(value: unknown, name: string, minimum: number, maximum: number): number {
   if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
     throw new ApiError(400, `${name} must be an integer from ${minimum} to ${maximum}`);
@@ -529,6 +631,15 @@ function optionalUserInputSchema(): Record<string, unknown> {
     type: "object",
     additionalProperties: false,
     properties: { userId: { type: "string", minLength: 1, maxLength: MAX_USER_ID_LENGTH } },
+  };
+}
+
+function widgetCapabilitySchema(): Record<string, unknown> {
+  return {
+    type: "string",
+    minLength: 32,
+    maxLength: 128,
+    description: "Opaque, short-lived dashboard capability returned only in the dashboard tool result metadata.",
   };
 }
 
