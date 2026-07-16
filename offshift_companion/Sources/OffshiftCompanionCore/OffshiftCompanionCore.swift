@@ -163,6 +163,49 @@ public enum InterventionState: String, Codable, CaseIterable, Sendable {
     case protect
 }
 
+/// A local-only escape hatch for every intervention. Its state is intentionally
+/// not serializable into MCP data and may never be changed by a model or Worker.
+public enum LocalInterventionAvailability: Equatable, Sendable {
+    case active
+    case paused(until: Date)
+    case disabled
+}
+
+/// Holds the local user's immediate pause/off decision. A host is responsible
+/// for persisting it locally; this policy is deliberately deterministic so it
+/// can be tested independently from UI and UserDefaults.
+public struct LocalInterventionGate: Equatable, Sendable {
+    public private(set) var availability: LocalInterventionAvailability
+
+    public init(availability: LocalInterventionAvailability = .active) {
+        self.availability = availability
+    }
+
+    @discardableResult
+    public mutating func pause(until date: Date, at now: Date) -> Bool {
+        guard date > now else { return false }
+        availability = .paused(until: date)
+        return true
+    }
+
+    public mutating func disable() {
+        availability = .disabled
+    }
+
+    public mutating func enable() {
+        availability = .active
+    }
+
+    /// Returns whether a new local intervention may begin. An elapsed pause
+    /// clears itself only when the companion next evaluates local state.
+    public mutating func permitsIntervention(at now: Date) -> Bool {
+        if case let .paused(until) = availability, now >= until {
+            availability = .active
+        }
+        return availability == .active
+    }
+}
+
 public enum AssessmentReason: String, Codable, CaseIterable, Sendable {
     case noRecentActivity
     case belowDriftThreshold

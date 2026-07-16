@@ -35,6 +35,29 @@ struct CompanionDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            GroupBox("Your control") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(store.localControlSummary)
+                    Text("These controls work only on this Mac. ChatGPT cannot pause, resume, or turn Offshift off for you.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        if store.isPaused {
+                            Button("Resume Offshift") { store.resumeOffshift() }
+                                .buttonStyle(.borderedProminent)
+                            Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
+                        } else if store.isOffshiftEnabled {
+                            Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
+                            Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
+                        } else {
+                            Button("Turn Offshift on") { store.resumeOffshift() }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             HStack {
                 Spacer()
                 Button("Open protection") { openWindow(id: "protection") }
@@ -86,6 +109,8 @@ struct ProtectionWindowView: View {
                 Button("Start 30-second countdown") { store.startPreLockCountdown() }
                     .disabled(!store.canStartCountdown)
             }
+
+            Button("Pause Offshift until tomorrow") { store.pauseUntilTomorrow() }
 
             Text("Local Lock Screen rule: \(store.lockRuleEnabled ? "enabled" : "disabled")")
                 .font(.callout.weight(.medium))
@@ -148,6 +173,24 @@ struct CompanionSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Offshift control") {
+                Text(store.localControlSummary)
+                Text("A pause immediately cancels the local countdown and prevents scenes or Lock Screen actions until tomorrow. Turning Offshift off also stops local sampling.")
+                    .foregroundStyle(.secondary)
+                if store.isPaused {
+                    HStack {
+                        Button("Resume Offshift") { store.resumeOffshift() }
+                        Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
+                    }
+                } else if store.isOffshiftEnabled {
+                    HStack {
+                        Button("Pause until tomorrow") { store.pauseUntilTomorrow() }
+                        Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
+                    }
+                } else {
+                    Button("Turn Offshift on") { store.resumeOffshift() }
+                }
+            }
             Section("Protection") {
                 Text("A local rule can use the macOS Lock Screen shortcut only after explicit confirmation.")
                 Text("Rule: when the local policy remains Protect, start one visible 30-second countdown. Cancel and a bounded 15-minute on-call override remain available.")

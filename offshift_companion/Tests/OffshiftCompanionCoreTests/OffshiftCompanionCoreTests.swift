@@ -105,6 +105,35 @@ final class WorkPatternHeuristicTests: XCTestCase {
     }
 }
 
+final class LocalInterventionGateTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    func testPauseSuppressesInterventionsUntilItsLocalExpiry() {
+        var gate = LocalInterventionGate()
+        let until = now.addingTimeInterval(60)
+
+        XCTAssertTrue(gate.pause(until: until, at: now))
+        XCTAssertFalse(gate.permitsIntervention(at: now.addingTimeInterval(59)))
+        XCTAssertTrue(gate.permitsIntervention(at: until))
+        XCTAssertEqual(gate.availability, .active)
+    }
+
+    func testDisableRequiresAnExplicitLocalEnable() {
+        var gate = LocalInterventionGate()
+        gate.disable()
+
+        XCTAssertFalse(gate.permitsIntervention(at: now.addingTimeInterval(24 * 60 * 60)))
+        gate.enable()
+        XCTAssertTrue(gate.permitsIntervention(at: now))
+    }
+
+    func testPauseRejectsAPastDeadline() {
+        var gate = LocalInterventionGate()
+        XCTAssertFalse(gate.pause(until: now, at: now))
+        XCTAssertEqual(gate.availability, .active)
+    }
+}
+
 final class HomeAssistantWindDownTests: XCTestCase {
     func testOnlyFixedWindDownSceneCanBeEncodedIntoARequest() throws {
         let configuration = try HomeAssistantWindDownConfiguration(

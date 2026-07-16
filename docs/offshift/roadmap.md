@@ -4,7 +4,7 @@
 
 Offshift should help a developer interrupt an unhealthy-looking work loop before it becomes another ignored notification. The first job is not to measure sleep or diagnose burnout. It is to make a late, uninterrupted, repeatedly-snoozed building session visible and give the person a respectful, reversible way to stop.
 
-The product calls this a **work-pattern risk**, never a health score. All detection is opt-in, explainable, and can be disabled immediately.
+The product calls this a **work-pattern risk**, never a health score. All detection is opt-in, explainable, and can be paused until tomorrow or disabled immediately from the local companion.
 
 ## What is already built
 
@@ -16,7 +16,7 @@ The first local slice is complete: an Apps SDK widget, local Node MCP server, re
 | --- | --- | --- | --- |
 | 1. Real App loop | Put the MCP endpoint behind HTTPS, bind the Worker persistence boundary, and test the widget in ChatGPT Developer Mode. | Run direct, indirect, and negative golden prompts; confirm tool selection, arguments, repeat-call idempotency, rendering, and recovery state. | A real ChatGPT App can explain and prepare a break; only the local companion may carry out local actions. |
 | 2. Shadow behaviour model | Build a local macOS collector that calculates a risk from coarse aggregates but shows no interruption yet. | Five developer participants use it for several work sessions; compare suggested events with a short self-report. | We learn whether the signals feel accurate enough to show. |
-| 3. Respectful intervention | Enable a local notification, then a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Measure acceptance, snooze, disable, and “unhelpful” events; test on-call override, instant disable, the pre-lock countdown, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
+| 3. Respectful intervention | Enable a local notification, then a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Measure acceptance, snooze, disable, and “unhelpful” events; test on-call override, local pause-until-tomorrow, instant disable, the pre-lock countdown, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
 | 4. One ambient action | Integrate exactly one user-owned, allowlisted Home Assistant `wind-down` scene. | Test a fixed request in a sandbox with revoked credentials, retry, offline, and explicit-confirmation cases. | The demo has a real-world action without unsafe open-ended control. |
 | 5. Longer-horizon platforms | Evaluate iOS Screen Time separately, only after the core loop is proven and Apple entitlement feasibility is known. | Prototype under Apple’s required consent/entitlement path; abandon if it compromises the product timeline. | No dependency on Screen Time for the product to be useful. |
 
@@ -39,7 +39,7 @@ Use three explainable bands rather than an opaque score:
 2. **Drift** — gentle nudge: “You have been active for 90 minutes; quiet hours began 30 minutes ago; tomorrow's early start is enabled.”
 3. **Protect** — local overlay offers `Take 5`, `Snooze once`, or `On call until <time>`. Sustained local activity remains required; quiet hours, repeated snoozes, and an early start make the reason clearer but do not independently cause a lock. A user who has explicitly enabled the optional local Lock Screen rule sees one cancellable 30-second countdown; the companion may then invoke macOS's own Lock Screen once in that protect episode. It never fakes a lock screen, locks by remote/model command, or ends a Codex session.
 
-The user must see the contributing categories, change thresholds, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
+The user must see the contributing categories, change thresholds, pause until tomorrow, turn Offshift off, and mark any nudge as unhelpful. The model does not set thresholds or decide escalation.
 
 ## Feature priority and proof of need
 

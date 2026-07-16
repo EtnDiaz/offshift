@@ -11,7 +11,7 @@
 
 Scheduling and snoozing require an explicit current-turn action. The companion asks for direct local confirmation before the only external scene is run. It does not currently expose an automatic scene rule.
 
-Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterrupted-work window, whether a Codex-session-active signal is allowed, whether an early-start reminder may be used, and an immediate disable switch. Incident/on-call mode must silence all nudges for a bounded duration and leave an audit entry; it must never be a hidden bypass.
+Behaviour monitoring is opt-in. The user selects quiet hours, a maximum uninterrupted-work window, whether a Codex-session-active signal is allowed, whether an early-start reminder may be used, and an immediate local disable switch. The macOS companion also owns a local pause-until-tomorrow gate that cancels an active countdown and suppresses all local interventions; MCP, the Worker, and ChatGPT cannot change it. Incident/on-call mode must silence all nudges for a bounded duration and leave an audit entry; it must never be a hidden bypass.
 
 ## Behaviour-model guardrails
 

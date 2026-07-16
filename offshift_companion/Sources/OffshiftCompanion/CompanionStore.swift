@@ -15,6 +15,7 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var samplingStatus = "Local aggregate sampling is starting"
     @Published private(set) var windDownStatus = "The wind-down scene is not configured on this Mac."
     @Published private(set) var isRunningWindDown = false
+    @Published private(set) var localControl = LocalInterventionGate()
 
     private let shadowLog = InMemoryShadowModeLog()
     private let disabledLockAdapter = NeverLockingTestAdapter()
@@ -22,6 +23,7 @@ final class CompanionStore: ObservableObject {
     private var controller: InterventionController
     private let riskPolicy = WorkPatternRiskPolicy()
     private let sampler = MacActivitySampler()
+    private let defaults: UserDefaults
     private var countdownTimer: Timer?
     private var hasStartedCountdownForProtectEpisode = false
     let homeAssistantSettings = HomeAssistantSettings()
@@ -29,8 +31,10 @@ final class CompanionStore: ObservableObject {
 
     private let lockCountdownDuration: TimeInterval = 30
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         controller = InterventionController(lockAdapter: disabledLockAdapter, shadowLog: shadowLog)
+        localControl = Self.loadLocalControl(from: defaults)
         homeAssistantSettings.onSettingsChanged = { [weak self] in
             self?.objectWillChange.send()
         }
@@ -40,14 +44,33 @@ final class CompanionStore: ObservableObject {
         sampler.onIntervalsChanged = { [weak self] intervals in
             self?.applyLiveIntervals(intervals)
         }
-        sampler.start()
+        if localControl.availability != .disabled {
+            sampler.start()
+        } else {
+            samplingStatus = "Offshift is turned off on this Mac."
+        }
     }
 
     var stateLabel: String { assessment.state.rawValue.capitalized }
     var reasons: [String] { assessment.reasons.map(\.rawValue) }
     var lockRuleEnabled: Bool { lockScreenSettings.isEnabled }
-    var canStartCountdown: Bool { assessment.state == .protect && lockRuleEnabled && !hasStartedCountdownForProtectEpisode }
-    var canRunWindDown: Bool { homeAssistantSettings.isConfigured && !isRunningWindDown }
+    var canStartCountdown: Bool { isOffshiftEnabled && assessment.state == .protect && lockRuleEnabled && !hasStartedCountdownForProtectEpisode }
+    var canRunWindDown: Bool { isOffshiftEnabled && localControl.availability == .active && homeAssistantSettings.isConfigured && !isRunningWindDown }
+    var isOffshiftEnabled: Bool { localControl.availability != .disabled }
+    var isPaused: Bool {
+        if case .paused = localControl.availability { return true }
+        return false
+    }
+    var localControlSummary: String {
+        switch localControl.availability {
+        case .active:
+            return "Offshift is active on this Mac."
+        case let .paused(until):
+            return "Offshift is paused until \(until.formatted(date: .abbreviated, time: .shortened))."
+        case .disabled:
+            return "Offshift is turned off on this Mac."
+        }
+    }
 
     func simulateRoutine() {
         apply(state: .routine, reasons: [.belowDriftThreshold])
@@ -82,6 +105,10 @@ final class CompanionStore: ObservableObject {
     }
 
     func startPreLockCountdown() {
+        guard localControl.permitsIntervention(at: .now) else {
+            countdownText = localControlSummary
+            return
+        }
         guard lockRuleEnabled else {
             countdownText = "The local Lock Screen rule is disabled. Enable it locally in Settings first."
             return
@@ -100,6 +127,10 @@ final class CompanionStore: ObservableObject {
     }
 
     func grantOnCallOverride() {
+        guard localControl.permitsIntervention(at: .now) else {
+            onCallMessage = localControlSummary
+            return
+        }
         switch controller.grantOnCallOverride(requestedDuration: 15 * 60, at: .now) {
         case let .granted(override):
             hasStartedCountdownForProtectEpisode = true
@@ -110,7 +141,38 @@ final class CompanionStore: ObservableObject {
         }
     }
 
+    func pauseUntilTomorrow() {
+        let now = Date.now
+        let tomorrow = Calendar.current.date(
+            byAdding: .day,
+            value: 1,
+            to: Calendar.current.startOfDay(for: now)
+        )!
+        guard localControl.pause(until: tomorrow, at: now) else { return }
+        persistLocalControl()
+        suppressLocalInterventions(message: "Offshift is paused until tomorrow. No local countdown, Lock Screen request, or scene can start while paused.")
+    }
+
+    func resumeOffshift() {
+        localControl.enable()
+        persistLocalControl()
+        sampler.start()
+        samplingStatus = "Local aggregate sampling resumed. No content leaves this Mac."
+        objectWillChange.send()
+    }
+
+    func disableOffshift() {
+        localControl.disable()
+        persistLocalControl()
+        sampler.stop()
+        suppressLocalInterventions(message: "Offshift is turned off on this Mac. Local sampling and interventions stopped.")
+    }
+
     func runWindDownScene() {
+        guard localControl.permitsIntervention(at: .now) else {
+            windDownStatus = "\(localControlSummary) The wind-down scene was not started."
+            return
+        }
         guard let credentials = homeAssistantSettings.credentials() else {
             windDownStatus = "Configure the local Home Assistant endpoint and Keychain token in Settings first."
             return
@@ -129,6 +191,11 @@ final class CompanionStore: ObservableObject {
     }
 
     private func applyLiveIntervals(_ intervals: [ActiveAppInterval]) {
+        guard localControl.permitsIntervention(at: .now) else {
+            samplingStatus = localControlSummary
+            return
+        }
+        persistLocalControl()
         apply(riskPolicy.assess(intervals, context: .init(), at: .now))
         samplingStatus = "Sampling aggregate active time locally. No content leaves this Mac."
     }
@@ -144,6 +211,7 @@ final class CompanionStore: ObservableObject {
     }
 
     private func apply(_ nextAssessment: WorkPatternAssessment) {
+        guard localControl.permitsIntervention(at: .now) else { return }
         let wasProtect = assessment.state == .protect
         assessment = nextAssessment
         _ = controller.apply(assessment, at: .now)
@@ -180,6 +248,53 @@ final class CompanionStore: ObservableObject {
             countdownText = "Local Lock Screen rule disabled."
         }
         objectWillChange.send()
+    }
+
+    private func suppressLocalInterventions(message: String) {
+        _ = controller.apply(
+            WorkPatternAssessment(
+                state: .routine,
+                totalActiveDuration: 0,
+                currentContinuousActiveDuration: 0,
+                appSwitchCount: 0,
+                reasons: [.noRecentActivity]
+            ),
+            at: .now
+        )
+        hasStartedCountdownForProtectEpisode = true
+        stopCountdownTimer()
+        countdownText = "No countdown running"
+        onCallMessage = nil
+        samplingStatus = message
+        objectWillChange.send()
+    }
+
+    private static func loadLocalControl(from defaults: UserDefaults) -> LocalInterventionGate {
+        guard defaults.bool(forKey: "offshift.localControl.enabled") else {
+            // A missing key means enabled; a recorded false means explicitly disabled.
+            if defaults.object(forKey: "offshift.localControl.enabled") != nil {
+                return LocalInterventionGate(availability: .disabled)
+            }
+            return LocalInterventionGate()
+        }
+        if let pauseUntil = defaults.object(forKey: "offshift.localControl.pauseUntil") as? Date {
+            return LocalInterventionGate(availability: .paused(until: pauseUntil))
+        }
+        return LocalInterventionGate()
+    }
+
+    private func persistLocalControl() {
+        switch localControl.availability {
+        case .active:
+            defaults.set(true, forKey: "offshift.localControl.enabled")
+            defaults.removeObject(forKey: "offshift.localControl.pauseUntil")
+        case let .paused(until):
+            defaults.set(true, forKey: "offshift.localControl.enabled")
+            defaults.set(until, forKey: "offshift.localControl.pauseUntil")
+        case .disabled:
+            defaults.set(false, forKey: "offshift.localControl.enabled")
+            defaults.removeObject(forKey: "offshift.localControl.pauseUntil")
+        }
     }
 
     private func maybeStartAutomaticCountdown() {
