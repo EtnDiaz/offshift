@@ -8,7 +8,7 @@ struct CompanionDashboardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top) {
-                OffshiftMascotView(size: 68)
+                RedCardCodexSleepMascotView(size: 68)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Offshift companion")
                         .font(.title2.weight(.semibold))
@@ -125,7 +125,7 @@ struct ProtectionWindowView: View {
 
             VStack(spacing: 24) {
                 Spacer()
-                OffshiftMascotView(size: 150)
+                RedCardCodexSleepMascotView(size: 150)
                 Text(store.careHeadline)
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)

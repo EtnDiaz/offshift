@@ -1,6 +1,6 @@
 # ADR 0005: Use an original Offshift companion mascot
 
-- Status: Accepted
+- Status: Superseded by ADR 0015
 - Date: 2026-07-16
 
 ## Context

@@ -12,7 +12,8 @@ let package = Package(
         .target(name: "OffshiftCompanionCore"),
         .executableTarget(
             name: "OffshiftCompanion",
-            dependencies: ["OffshiftCompanionCore"]
+            dependencies: ["OffshiftCompanionCore"],
+            resources: [.copy("Resources")]
         ),
         .testTarget(
             name: "OffshiftCompanionCoreTests",
