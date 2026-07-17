@@ -101,6 +101,12 @@ final class CompanionStore: ObservableObject {
     var canStartCountdown: Bool { isOffshiftEnabled && assessment.state == .protect && lockRuleEnabled && !hasStartedCountdownForProtectEpisode }
     var canRunWindDown: Bool { isOffshiftEnabled && localControl.availability == .active && homeAssistantSettings.isConfigured && !isRunningWindDown }
     var isOffshiftEnabled: Bool { localControl.availability != .disabled }
+    /// AppKit may finish configuring a monitor-covering window after the user
+    /// has already chosen a local pause. This value is the final gate before a
+    /// delayed view callback can put that window back on screen.
+    var shouldKeepProtectionSurfacePresented: Bool {
+        assessment.state == .protect && localControl.permitsIntervention(at: .now)
+    }
     var isPaused: Bool {
         if case .paused = localControl.availability { return true }
         return false

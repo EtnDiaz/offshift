@@ -91,6 +91,7 @@ struct ProtectionWindowView: View {
         }
         .background(InterventionWindowConfigurator(
             requiresMonitorCover: store.careScreenRequiresMonitorCover,
+            shouldKeepPresented: { store.shouldKeepProtectionSurfacePresented },
             onProtectionWindowReady: {
                 store.protectionSurfaceDidBecomeVisible()
             }
