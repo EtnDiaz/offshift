@@ -1,6 +1,5 @@
 import AppKit
 import OffshiftCompanionCore
-import OSLog
 import SwiftUI
 
 @main
@@ -16,7 +15,6 @@ struct OffshiftCompanionApp: App {
 
 @MainActor
 final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
-    private let careLogger = Logger(subsystem: "com.tixo.offshift.companion", category: "care-surface")
     let store = CompanionStore()
     private var emergencyExitGate = EmergencyEscapeExitGate()
     private var localKeyMonitor: Any?
@@ -25,10 +23,11 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var protectionWindow: NSWindow?
     private var statusItem: NSStatusItem?
-    private var isStatusMenuTracking = false
-    private var isProtectionPresentationPending = false
+    private var statusPopover: NSPopover?
+    private var isProtectionPresentationScheduled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        OffshiftDiagnostics.record("app_launched")
         NSApp.setActivationPolicy(.accessory)
         if let image = OffshiftBrandMark.image {
             NSApp.applicationIconImage = image
@@ -55,6 +54,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        OffshiftDiagnostics.record("app_will_terminate")
         removeEmergencyExitMonitor()
     }
 
@@ -65,37 +65,59 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         // an image asset is unavailable or the system declines an SF Symbol.
         item.button?.title = "☾"
         item.button?.toolTip = "Offshift — open Today and Settings"
-        item.menu = makeStatusMenu()
+        item.button?.target = self
+        item.button?.action = #selector(toggleStatusPopover)
+        item.button?.sendAction(on: [.leftMouseUp])
         statusItem = item
     }
 
-    private func makeStatusMenu() -> NSMenu {
-        let menu = NSMenu(title: "Offshift")
-        menu.delegate = self
-        menu.addItem(withTitle: "Open Today", action: #selector(openToday), keyEquivalent: "")
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+    @objc private func toggleStatusPopover() {
+        guard let button = statusItem?.button else { return }
+        let popover = statusPopover ?? makeStatusPopover()
+        statusPopover = popover
+        if popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        OffshiftDiagnostics.record("tray_popover_opened")
+    }
+
+    private func makeStatusPopover() -> NSPopover {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.delegate = self
+        popover.contentSize = NSSize(width: 280, height: 236)
+        popover.contentViewController = NSHostingController(rootView: StatusPopoverView(
+            store: store,
+            openToday: { [weak self] in self?.openTodayFromPopover() },
+            openSettings: { [weak self] in self?.openSettingsFromPopover() },
+            showDeveloperCare: { [weak self] in self?.showDeveloperCareFromPopover() },
+            quit: { NSApplication.shared.terminate(nil) }
+        ))
+        return popover
+    }
+
+    private func openTodayFromPopover() {
+        dismissStatusPopover()
+        DispatchQueue.main.async { [weak self] in self?.showDashboard() }
+    }
+
+    private func openSettingsFromPopover() {
+        dismissStatusPopover()
+        DispatchQueue.main.async { [weak self] in self?.showSettings() }
+    }
+
+    private func showDeveloperCareFromPopover() {
+        dismissStatusPopover()
         #if DEBUG
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Developer: care screen", action: #selector(showDeveloperCarePreview), keyEquivalent: "")
+        DispatchQueue.main.async { [weak self] in self?.store.showDeveloperCarePreview() }
         #endif
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Offshift", action: #selector(quit), keyEquivalent: "q")
-        return menu
     }
 
-    @objc private func openToday() { showDashboard() }
-
-    @objc private func openSettings() {
-        showSettings()
+    private func dismissStatusPopover() {
+        statusPopover?.performClose(nil)
     }
-
-    #if DEBUG
-    @objc private func showDeveloperCarePreview() {
-        store.showDeveloperCarePreview()
-    }
-    #endif
-
-    @objc private func quit() { NSApp.terminate(nil) }
 
     func showDashboard() {
         let window = dashboardWindow ?? makeDashboardWindow()
@@ -142,18 +164,20 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
 
     private func showProtection() {
         guard store.shouldKeepProtectionSurfacePresented else { return }
-        // NSMenu runs its own modal event loop. Presenting a key window from a
-        // status-item action before that loop has finished produces a visible
-        // but non-interactive care surface. Close the menu first and resume on
-        // the ordinary app event loop from `menuDidClose`.
-        if isStatusMenuTracking {
-            isProtectionPresentationPending = true
-            careLogger.notice("Deferring care presentation until status menu closes")
-            statusItem?.menu?.cancelTracking()
-            return
+        // An NSStatusItem `menu` enters an AppKit modal menu-tracking loop.
+        // That loop is incompatible with a care surface that can immediately
+        // be dismissed and then followed by another tray interaction. The
+        // tray therefore uses an NSPopover; close it before showing care and
+        // continue on the ordinary main event loop.
+        dismissStatusPopover()
+        guard !isProtectionPresentationScheduled else { return }
+        isProtectionPresentationScheduled = true
+        OffshiftDiagnostics.record("care_presentation_scheduled")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isProtectionPresentationScheduled = false
+            self.presentProtectionWindow()
         }
-
-        presentProtectionWindow()
     }
 
     private func presentProtectionWindow() {
@@ -163,7 +187,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installEmergencyExitMonitor()
-        careLogger.notice("Presented interactive care surface")
+        OffshiftDiagnostics.record("care_surface_presented")
     }
 
     private func makeProtectionWindow() -> NSWindow {
@@ -185,10 +209,11 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func dismissProtection() {
+        isProtectionPresentationScheduled = false
         removeEmergencyExitMonitor()
         store.protectionSurfaceDidDisappear()
         protectionWindow?.orderOut(nil)
-        careLogger.notice("Dismissed care surface through local action")
+        OffshiftDiagnostics.record("care_surface_dismissed")
     }
 
     /// The emergency exit is intentionally local to the care surface. Installing
@@ -215,7 +240,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
 
     private func recordEmergencyEscape() {
         guard emergencyExitGate.recordEscape(at: Date.now) else { return }
-        careLogger.notice("Emergency exit completed")
+        OffshiftDiagnostics.record("care_emergency_exit")
         NSApp.terminate(nil)
     }
 
@@ -247,6 +272,12 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+extension OffshiftAppDelegate: NSPopoverDelegate {
+    func popoverDidClose(_ notification: Notification) {
+        OffshiftDiagnostics.record("tray_popover_closed")
+    }
+}
+
 /// Restricts the four-Escape exit to a visible local care surface. A monitor
 /// must not require `isKeyWindow`: monitor-covering AppKit windows can be
 /// intentionally visible while the prior application remains key.
@@ -256,27 +287,6 @@ enum EmergencyEscapeMonitorPolicy {
         isProtectionVisible: Bool
     ) -> Bool {
         keyCode == 53 && isProtectionVisible
-    }
-}
-
-extension OffshiftAppDelegate: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        guard menu === statusItem?.menu else { return }
-        isStatusMenuTracking = true
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        guard menu === statusItem?.menu else { return }
-        isStatusMenuTracking = false
-        guard isProtectionPresentationPending else { return }
-        isProtectionPresentationPending = false
-        DispatchQueue.main.async { [weak self] in
-            self?.showProtection()
-        }
-    }
-
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.item(at: 0)?.title = store.isOffshiftEnabled ? "Offshift is on — Open Today" : "Offshift is off — Open Today"
     }
 }
 

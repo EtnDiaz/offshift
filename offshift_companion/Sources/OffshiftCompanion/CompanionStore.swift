@@ -86,6 +86,7 @@ final class CompanionStore: ObservableObject {
         } else {
             samplingStatus = "Offshift is turned off on this Mac."
         }
+        OffshiftDiagnostics.record("store_initialized")
     }
 
     var stateLabel: String { assessment.state.rawValue.capitalized }
@@ -224,6 +225,7 @@ final class CompanionStore: ObservableObject {
     /// A Debug-only local visual test route. It deliberately cannot start the
     /// optional Lock Screen countdown or a smart-home action.
     func showDeveloperCarePreview() {
+        OffshiftDiagnostics.record("developer_care_preview_requested")
         careScreenTriggerSource = .developerPreview
         // This explicit local QA route must be inspectable even on a fresh
         // install, where onboarding intentionally leaves normal interventions
@@ -275,6 +277,7 @@ final class CompanionStore: ObservableObject {
     }
 
     func takeFive() {
+        OffshiftDiagnostics.record("take_five_requested")
         let now = Date.now
         let until = now.addingTimeInterval(5 * 60)
         // Resetting the sampler alone is insufficient: the next active sample
@@ -283,11 +286,13 @@ final class CompanionStore: ObservableObject {
         guard localControl.pause(until: until, at: now) else {
             sampler.resetActivityWindow(at: now)
             countdownText = "Take five. Offshift will check local aggregate activity again when you return."
+            OffshiftDiagnostics.record("take_five_sampler_reset_only")
             return
         }
         persistLocalControl()
         sampler.resetActivityWindow(at: now)
         suppressLocalInterventions(message: "Take five. Offshift notices are paused until \(until.formatted(date: .omitted, time: .shortened)).")
+        OffshiftDiagnostics.record("take_five_pause_started")
     }
 
     func pauseNoticesForFifteenMinutes() {
@@ -305,6 +310,7 @@ final class CompanionStore: ObservableObject {
         guard assessment.state == .protect, localControl.permitsIntervention(at: .now) else { return }
         protectionSurfaceGate.markSurfaceVisible()
         isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
+        OffshiftDiagnostics.record("care_surface_became_visible")
         maybeStartAutomaticCountdown()
     }
 
@@ -313,6 +319,7 @@ final class CompanionStore: ObservableObject {
     func protectionSurfaceDidDisappear() {
         protectionSurfaceGate.endProtectEpisode()
         isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
+        OffshiftDiagnostics.record("care_surface_disappeared")
         guard controller.cancelPreLockCountdown(at: .now) else { return }
         hasStartedCountdownForProtectEpisode = true
         stopCountdownTimer()

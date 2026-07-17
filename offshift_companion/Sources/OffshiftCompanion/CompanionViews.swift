@@ -121,21 +121,33 @@ struct ProtectionWindowView: View {
     }
 }
 
-struct MenuBarContent: View {
+struct StatusPopoverView: View {
     @ObservedObject var store: CompanionStore
-    let showDashboard: () -> Void
+    let openToday: () -> Void
+    let openSettings: () -> Void
+    let showDeveloperCare: () -> Void
+    let quit: () -> Void
 
     var body: some View {
-        Text("Offshift is \(store.isOffshiftEnabled ? "on" : "off")")
-        Button("Show Today") { showDashboard() }
-        SettingsLink { Text("Settings…") }
-        #if DEBUG
-        Divider()
-        Button("Developer: care screen") {
-            store.showDeveloperCarePreview()
+        VStack(alignment: .leading, spacing: 10) {
+            Text(store.isOffshiftEnabled ? "Offshift is on" : "Offshift is off")
+                .font(.headline)
+            Text(store.localControlSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+            Button("Open Today", action: openToday)
+            Button("Settings…", action: openSettings)
+            #if DEBUG
+            Divider()
+            Button("Developer: care screen", action: showDeveloperCare)
+            #endif
+            Divider()
+            Button("Quit Offshift", role: .destructive, action: quit)
         }
-        #endif
-        Divider()
-        Button("Quit Offshift") { NSApplication.shared.terminate(nil) }
+        .padding(14)
+        .frame(width: 280, alignment: .leading)
     }
 }

@@ -22,6 +22,7 @@ APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ASSET_CATALOG="$ROOT_DIR/Resources/AppIcon/Assets.xcassets"
 ASSET_INFO_PLIST="$APP_CONTENTS/asset-info.plist"
+DIAGNOSTIC_LOG="$HOME/Library/Logs/Offshift/diagnostics.log"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 # LaunchServices may still be releasing the previous bundle for a short moment
@@ -83,8 +84,8 @@ cat >"$INFO_PLIST" <<PLIST
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>$APP_DISPLAY_NAME</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1.1</string>
-<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleShortVersionString</key><string>0.1.2</string>
+<key>CFBundleVersion</key><string>3</string>
 <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
 <key>LSUIElement</key><true/>
 <key>NSFocusStatusUsageDescription</key><string>Offshift reads only whether a Focus is active on this Mac to explain a local quiet-hours suggestion. It does not read the Focus name, calendar, notifications, or screen content.</string>
@@ -118,6 +119,13 @@ codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 open_app() { /usr/bin/open "$APP_BUNDLE"; }
 open_care_preview() { /usr/bin/open "$APP_BUNDLE" --args --care-preview; }
 open_settings_preview() { /usr/bin/open "$APP_BUNDLE" --args --settings-preview; }
+stream_diagnostics() {
+  mkdir -p "$(dirname "$DIAGNOSTIC_LOG")"
+  touch "$DIAGNOSTIC_LOG"
+  echo "Offshift local diagnostic log: $DIAGNOSTIC_LOG"
+  echo "Press Control-C to stop streaming."
+  tail -n 80 -F "$DIAGNOSTIC_LOG"
+}
 case "$MODE" in
   run) open_app ;;
   --care-preview|care-preview) open_care_preview ;;
@@ -126,6 +134,8 @@ case "$MODE" in
   --debug|debug) lldb -- "$APP_BINARY" ;;
   --logs|logs) open_app; /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\"" ;;
   --telemetry|telemetry) open_app; /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\"" ;;
+  --diagnose|diagnose) open_app; stream_diagnostics ;;
+  --care-preview-diagnose|care-preview-diagnose) open_care_preview; stream_diagnostics ;;
   --verify|verify) open_app; sleep 1; pgrep -x "$APP_NAME" >/dev/null ;;
-  *) echo "usage: $0 [run|--care-preview|--settings-preview|--bundle|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  *) echo "usage: $0 [run|--care-preview|--settings-preview|--bundle|--debug|--logs|--telemetry|--diagnose|--care-preview-diagnose|--verify]" >&2; exit 2 ;;
 esac
