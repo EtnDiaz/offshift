@@ -24,12 +24,11 @@ gates.
 
 Only a Debug `developerPreview` source uses a developer-QA presentation:
 
-- the process temporarily uses normal macOS activation so local QA tooling can
-  address it;
+- the process retains its normal accessory activation, so it remains a
+  tray-first companion without a Dock icon;
 - the otherwise identical black, main-display care composition uses a floating
   window level rather than screen-saver level;
-- the process returns to accessory activation when that preview closes or
-  terminates.
+- closing or terminating the preview leaves that tray-first policy unchanged.
 
 This presentation distinction is derived only from the local trigger source.
 It is not an MCP tool, URL, IPC command, setting, or model-controlled option.
