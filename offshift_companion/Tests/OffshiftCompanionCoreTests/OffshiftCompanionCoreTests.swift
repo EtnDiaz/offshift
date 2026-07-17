@@ -190,6 +190,28 @@ final class CareScreenTriggerSourceTests: XCTestCase {
     }
 }
 
+final class EmergencyEscapeExitGateTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    func testFourFastEscapePressesRequestLocalExit() {
+        var gate = EmergencyEscapeExitGate()
+
+        XCTAssertFalse(gate.recordEscape(at: now))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(0.4)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(0.8)))
+        XCTAssertTrue(gate.recordEscape(at: now.addingTimeInterval(1.2)))
+    }
+
+    func testSlowEscapePressesDoNotAccumulateIntoAnExit() {
+        var gate = EmergencyEscapeExitGate()
+
+        XCTAssertFalse(gate.recordEscape(at: now))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.1)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.5)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.9)))
+    }
+}
+
 final class QuietHoursScheduleTests: XCTestCase {
     func testOvernightQuietHoursIncludeMidnightAndExcludeTheEndHour() {
         let schedule = QuietHoursSchedule(startHour: 23, endHour: 7)

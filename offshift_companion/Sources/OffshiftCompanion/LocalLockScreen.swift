@@ -1,4 +1,5 @@
 import ApplicationServices
+import AppKit
 import Foundation
 import OffshiftCompanionCore
 
@@ -54,6 +55,15 @@ final class LocalLockScreenSettings: ObservableObject {
         AXIsProcessTrusted()
             ? "Accessibility permission is available for this local app."
             : "Before a configured rule can lock, grant Offshift Accessibility permission in macOS Privacy & Security."
+    }
+
+    var hasAccessibilityPermission: Bool {
+        AXIsProcessTrusted()
+    }
+
+    func openAccessibilitySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @discardableResult

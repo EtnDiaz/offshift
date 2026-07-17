@@ -20,6 +20,7 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var protectionPresentationToken = 0
     @Published private(set) var careMode: OffshiftCareMode
     @Published private(set) var isProtectionSurfaceVisible = false
+    @Published private(set) var needsOnboarding: Bool
 
     private let shadowLog = InMemoryShadowModeLog()
     private let disabledLockAdapter = NeverLockingTestAdapter()
@@ -38,11 +39,13 @@ final class CompanionStore: ObservableObject {
     let homeAssistantSettings = HomeAssistantSettings()
     let lockScreenSettings = LocalLockScreenSettings()
     let nightCareSettings = NightCareSettings()
+    let focusStatusSettings = FocusStatusSettings()
 
     /// A short, always-visible local interval: the intervention wall appears first,
     /// then a separately enabled local rule may request the real system Lock Screen.
     private let lockCountdownDuration: TimeInterval = 10
     private static let careModeDefaultsKey = "offshift.careMode"
+    private static let onboardingCompleteDefaultsKey = "offshift.onboardingComplete"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -50,6 +53,7 @@ final class CompanionStore: ObservableObject {
         let loadedLocalControl = Self.loadLocalControl(from: defaults)
         localControl = loadedLocalControl
         careMode = Self.loadCareMode(from: defaults, localControl: loadedLocalControl)
+        needsOnboarding = !defaults.bool(forKey: Self.onboardingCompleteDefaultsKey)
         homeAssistantSettings.onSettingsChanged = { [weak self] in
             self?.objectWillChange.send()
         }
@@ -59,10 +63,18 @@ final class CompanionStore: ObservableObject {
         nightCareSettings.onSettingsChanged = { [weak self] in
             self?.objectWillChange.send()
         }
+        focusStatusSettings.onSettingsChanged = { [weak self] in
+            self?.objectWillChange.send()
+        }
         sampler.onIntervalsChanged = { [weak self] intervals in
             self?.applyLiveIntervals(intervals)
         }
-        if careMode == .off {
+        if needsOnboarding {
+            careMode = .off
+            localControl.disable()
+            persistLocalControl()
+            samplingStatus = "Finish the local setup to decide whether Offshift may start sampling."
+        } else if careMode == .off {
             localControl.disable()
             persistLocalControl()
             samplingStatus = "Offshift is off. Local sampling and interventions stopped."
@@ -350,6 +362,12 @@ final class CompanionStore: ObservableObject {
 
     func resumeOffshift() {
         setCareMode(.sleep)
+    }
+
+    func completeOnboarding(enableLocalCare: Bool) {
+        defaults.set(true, forKey: Self.onboardingCompleteDefaultsKey)
+        needsOnboarding = false
+        setCareMode(enableLocalCare ? .sleep : .off)
     }
 
     func disableOffshift() {

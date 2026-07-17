@@ -249,6 +249,30 @@ public enum CareScreenTriggerSource: Equatable, Sendable {
     }
 }
 
+/// A local emergency exit recognizer. The AppKit host supplies Escape key
+/// events; neither remote systems nor model output can advance this gate.
+public struct EmergencyEscapeExitGate: Equatable, Sendable {
+    private var escapeDates: [Date] = []
+    private let requiredPresses: Int
+    private let interval: TimeInterval
+
+    public init(requiredPresses: Int = 4, interval: TimeInterval = 2) {
+        precondition(requiredPresses > 0)
+        precondition(interval > 0)
+        self.requiredPresses = requiredPresses
+        self.interval = interval
+    }
+
+    @discardableResult
+    public mutating func recordEscape(at now: Date) -> Bool {
+        escapeDates = escapeDates.filter { now.timeIntervalSince($0) <= interval }
+        escapeDates.append(now)
+        guard escapeDates.count >= requiredPresses else { return false }
+        escapeDates.removeAll()
+        return true
+    }
+}
+
 public enum AssessmentReason: String, Codable, CaseIterable, Sendable {
     case noRecentActivity
     case belowDriftThreshold

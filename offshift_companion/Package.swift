@@ -18,6 +18,10 @@ let package = Package(
         .testTarget(
             name: "OffshiftCompanionCoreTests",
             dependencies: ["OffshiftCompanionCore"]
+        ),
+        .testTarget(
+            name: "OffshiftCompanionTests",
+            dependencies: ["OffshiftCompanion"]
         )
     ]
 )

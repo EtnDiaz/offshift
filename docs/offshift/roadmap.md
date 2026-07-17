@@ -16,7 +16,7 @@ The first local slice is complete: an Apps SDK widget, local Node MCP server, re
 | --- | --- | --- | --- |
 | 1. Real App loop | Put the MCP endpoint behind HTTPS, bind the Worker persistence boundary, and test the widget in ChatGPT Developer Mode. | Run direct, indirect, and negative golden prompts; confirm tool selection, arguments, repeat-call idempotency, rendering, and recovery state. | A real ChatGPT App can explain and prepare a break; only the local companion may carry out local actions. |
 | 2. Shadow behaviour model | Build a local macOS collector that calculates a risk from coarse aggregates but shows no interruption yet. | Five developer participants use it for several work sessions; compare suggested events with a short self-report. | We learn whether the signals feel accurate enough to show. |
-| 3. Respectful intervention | Enable a local notification, then a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Measure acceptance, snooze, disable, and “unhelpful” events; test on-call override, local pause-until-tomorrow, instant disable, the pre-lock countdown, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
+| 3. Respectful intervention | Start with consent-first onboarding, then enable a local notification and a small action-required overlay only for high-confidence patterns. Add a separately enabled, entirely local system Lock Screen rule only after overlay validation. | Test first-run “not now”, each just-in-time permission, acceptance, snooze, disable, and “unhelpful” events; test on-call override, local pause-until-tomorrow, instant disable, the pre-lock countdown, four-Escape emergency exit, and the one-lock-per-night limit. | The ritual helps rather than distracts or traps the user. |
 | 4. One ambient action | Integrate exactly one user-owned, allowlisted Home Assistant `wind-down` scene. | Test a fixed request in a sandbox with revoked credentials, retry, offline, and explicit-confirmation cases. | The demo has a real-world action without unsafe open-ended control. |
 | 5. Longer-horizon platforms | Evaluate Screen Time separately, only after the core loop is proven and Apple entitlement feasibility is known. The companion already has a local `Sleep care` → `Off` reducer that cancels sampling, countdowns, and the intervention surface; a future adapter may call it, but the MVP does not read Apple’s system mode. | Prototype under Apple’s required consent/entitlement path; abandon if it compromises the product timeline. | No dependency on Screen Time for the product to be useful. |
 
@@ -62,7 +62,7 @@ The user must see the contributing categories, change thresholds, pause until to
 2. **Worker/API tests** — validation, authorization boundaries, offline/retry behaviour, and persistence migration tests.
 3. **MCP integration tests** — tool descriptors, UI resource MIME type/CSP, render data, and repeated tool calls.
 4. **ChatGPT Developer Mode tests** — use an HTTPS endpoint, execute direct/indirect/negative golden prompts, record selected tools and arguments, and check small layouts. ChatGPT Apps require an HTTPS MCP endpoint; rebuild, restart, and refresh the app metadata while iterating. [OpenAI Apps SDK deployment guide](https://developers.openai.com/apps-sdk/deploy) and [testing guide](https://developers.openai.com/apps-sdk/deploy/testing).
-5. **Companion manual tests** — permission denial, quiet-hours boundary, idle/resume, repeat-snooze and early-start explanations, instant disable, reboot, no network, pre-lock cancel, one-lock-per-night, and restoration after the system Lock Screen. Camera work, if ever piloted, adds a local-only/no-frame-retention audit rather than a fatigue test.
+5. **Companion manual tests** — first-run “not now”, just-in-time permission denial/approval, quiet-hours boundary, idle/resume, repeat-snooze and early-start explanations, instant disable, reboot, no network, pre-lock cancel, four-Escape emergency exit, one-lock-per-night, and restoration after the system Lock Screen. Camera work, if ever piloted, adds a local-only/no-frame-retention audit rather than a fatigue test.
 6. **Pilot evidence** — five opt-in developers, short interviews after several sessions, and only aggregate local event logs. Review false positives before enabling overlays.
 7. **UX acceptance gate** — capture the macOS tray, Today, Settings, and protective-screen flows plus the Apps SDK widget at their target sizes. Verify a user can identify what Offshift noticed, the one immediate action, the bounded deferral, and where local-only settings live without encountering developer fixtures or technical policy tokens. The Debug-only care preview must never start a Lock Screen countdown. Record keyboard focus, text scaling, and no-surprise Lock Screen boundaries.
 
@@ -70,11 +70,11 @@ The user must see the contributing categories, change thresholds, pause until to
 
 The immediate implementation checkpoint is **Care-loop UX**: turn the local
 companion into a focused Today surface, keep durable controls in the native
-Settings scene, enlarge the local black care surface around the sleeping Codex
-brand mark, and simplify the Apps SDK widget to one prepared reset plus a
-clear local-only handoff. This is an MVP quality gate, not a new product
-authority: it must preserve all consent, privacy, local Lock Screen, and
-allowlisted-scene boundaries above.
+Settings scene, use a consent-first first-run flow, enlarge the local black
+care surface around the animated sleeping Codex mascot, and simplify the Apps
+SDK widget to one prepared reset plus a clear local-only handoff. This is an
+MVP quality gate, not a new product authority: it must preserve all consent,
+privacy, local Lock Screen, and allowlisted-scene boundaries above.
 
 The next external dependency is still **Real App loop**: run the golden-prompt suite in ChatGPT Developer Mode against the public HTTPS Worker. The endpoint, Developer Mode setting, and external MCP contract are verified; the remaining dependency is ChatGPT connector provisioning. Its direct New Plugin form accepts Offshift metadata and `No Auth`, but returns a generic “Error creating connector” toast even after a verified MCP version-negotiation fix. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
 

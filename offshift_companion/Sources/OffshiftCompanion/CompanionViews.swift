@@ -12,7 +12,7 @@ struct ProtectionWindowView: View {
 
             ScrollView {
                 VStack(spacing: 26) {
-                    OffshiftBrandMarkView(size: 270)
+                    RedCardCodexSleepMascotView(size: 270)
                     Text(store.careHeadline)
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)

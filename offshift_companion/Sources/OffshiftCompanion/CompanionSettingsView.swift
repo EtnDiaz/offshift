@@ -101,9 +101,13 @@ struct CompanionSettingsView: View {
                     Button("Disable local Lock Screen rule", role: .destructive) {
                         store.lockScreenSettings.disableImmediately()
                     }
-                } else {
+                } else if store.lockScreenSettings.hasAccessibilityPermission {
                     Button("Enable local Lock Screen rule…") {
                         showingLockScreenConfirmation = true
+                    }
+                } else {
+                    Button("Open Accessibility Settings") {
+                        store.lockScreenSettings.openAccessibilitySettings()
                     }
                 }
             }
@@ -163,6 +167,23 @@ struct CompanionSettingsView: View {
                 Text("ChatGPT and MCP can explain or prepare a plan. They cannot open a local care screen, invoke the Lock Screen, run a Home Assistant scene, or change these settings.")
                     .foregroundStyle(.secondary)
             }
+            Section("Focus Status (optional)") {
+                Text(store.focusStatusSettings.summary)
+                    .foregroundStyle(.secondary)
+                if store.focusStatusSettings.canRequestAuthorization {
+                    Button("Allow Focus Status") {
+                        store.focusStatusSettings.requestAuthorization()
+                    }
+                } else {
+                    Button("Refresh Focus Status") {
+                        store.focusStatusSettings.refresh()
+                    }
+                }
+                Text("Offshift reads only the local on/off status after you allow it. It does not learn the Focus name, calendar, or notification contents, and Focus alone never opens a care screen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .onAppear { store.focusStatusSettings.refresh() }
     }
 }
