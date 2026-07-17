@@ -7,7 +7,13 @@ APP_DISPLAY_NAME="Offshift"
 BUNDLE_ID="com.tixo.offshift.companion"
 MIN_SYSTEM_VERSION="14.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
+# A bundle executed from ~/Documents triggers the Files & Folders TCC prompt,
+# while an Application Support bundle can still be indexed by Spotlight. Keep
+# source in the workspace, but stage the runnable developer app under TMPDIR:
+# it needs no Documents permission and never becomes an app-search candidate.
+WORKSPACE_DIST_DIR="$ROOT_DIR/dist"
+DEVELOPER_BUILD_DIR="${TMPDIR:-/tmp}/OffshiftDeveloperBuild"
+DIST_DIR="${OFFSHIFT_BUILD_DIR:-$DEVELOPER_BUILD_DIR}"
 APP_BUNDLE="$DIST_DIR/$APP_DISPLAY_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -33,6 +39,24 @@ cd "$ROOT_DIR"
 swift build
 bash ./script/generate_app_icon.sh
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+
+# Migrate old generated bundles once. They are disposable build artifacts,
+# never application state, and are the source of stale Spotlight/Launchpad
+# records from earlier development runs.
+LSREGISTER="$(/usr/bin/xcode-select -p)/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+didUnregisterLegacyBundle=false
+for legacyApp in \
+  "$WORKSPACE_DIST_DIR/$APP_DISPLAY_NAME.app" \
+  "$HOME/Library/Application Support/Offshift/DeveloperBuild/$APP_DISPLAY_NAME.app"; do
+  if [ -d "$legacyApp" ] && [ "$legacyApp" != "$APP_BUNDLE" ]; then
+    "$LSREGISTER" -u "$legacyApp" >/dev/null 2>&1 || true
+    rm -rf "$legacyApp"
+    didUnregisterLegacyBundle=true
+  fi
+done
+if [ "$didUnregisterLegacyBundle" = true ]; then
+  killall Dock >/dev/null 2>&1 || true
+fi
 
 rm -rf "$DIST_DIR/$APP_NAME.app" "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
@@ -86,9 +110,10 @@ open_care_preview() { /usr/bin/open "$APP_BUNDLE" --args --care-preview; }
 case "$MODE" in
   run) open_app ;;
   --care-preview|care-preview) open_care_preview ;;
+  --bundle|bundle) ;;
   --debug|debug) lldb -- "$APP_BINARY" ;;
   --logs|logs) open_app; /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\"" ;;
   --telemetry|telemetry) open_app; /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\"" ;;
   --verify|verify) open_app; sleep 1; pgrep -x "$APP_NAME" >/dev/null ;;
-  *) echo "usage: $0 [run|--care-preview|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  *) echo "usage: $0 [run|--care-preview|--bundle|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
 esac

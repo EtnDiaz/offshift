@@ -30,4 +30,19 @@ final class CompanionStoreOnboardingTests: XCTestCase {
         XCTAssertFalse(store.needsOnboarding)
         XCTAssertFalse(store.isOffshiftEnabled)
     }
+
+    func testDeveloperCarePreviewPresentsEvenWhenFreshOnboardingKeepsCareOff() {
+        let suiteName = "OffshiftCompanionTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = CompanionStore(defaults: defaults)
+        var presentations = 0
+        store.onProtectionRequested = { presentations += 1 }
+
+        store.showDeveloperCarePreview()
+
+        XCTAssertEqual(store.assessment.state, .protect)
+        XCTAssertEqual(presentations, 1)
+        XCTAssertFalse(store.isOffshiftEnabled)
+    }
 }

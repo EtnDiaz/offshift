@@ -26,6 +26,19 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+Create a local DMG without launching the app:
+
+```sh
+./script/package_dmg.sh
+```
+
+The runnable development bundle is staged outside the source checkout under
+`$TMPDIR/OffshiftDeveloperBuild`, so running from a workspace in `~/Documents`
+does not request access to Documents or create Spotlight app entries. The DMG
+is written to `release/` and is ad-hoc signed
+for development only; a public release needs Developer ID signing and
+notarization credentials.
+
 ## Coordination handoff
 
 Scope: `offshift_companion/**` only, on branch `agent/codex/150-offshift-mvp`. The required coordination issue is `tixo-digital/program#150`; material scope and verification updates are recorded there. The implementation is self-contained and the test command above is the verification handoff.

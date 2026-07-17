@@ -1,4 +1,5 @@
 .build/
 dist/
+release/
 Resources/AppIcon/Offshift.iconset/
 Resources/AppIcon/Assets.xcassets/AppIcon.appiconset/*.png

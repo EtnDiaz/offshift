@@ -208,7 +208,12 @@ final class CompanionStore: ObservableObject {
     /// optional Lock Screen countdown or a smart-home action.
     func showDeveloperCarePreview() {
         careScreenTriggerSource = .developerPreview
-        apply(state: .protect, reasons: [.protectContinuousActivity])
+        // This explicit local QA route must be inspectable even on a fresh
+        // install, where onboarding intentionally leaves normal interventions
+        // off. `developerPreview` still suppresses countdown and smart-home
+        // authority; bypassing the ordinary intervention gate only presents
+        // the visual surface requested by the local developer flag.
+        apply(state: .protect, reasons: [.protectContinuousActivity], bypassingLocalInterventionGate: true)
     }
 
     func simulateLateSessionRisk() {
@@ -428,18 +433,25 @@ final class CompanionStore: ObservableObject {
         samplingStatus = "Sampling aggregate active time locally. No content leaves this Mac."
     }
 
-    private func apply(state: InterventionState, reasons: [AssessmentReason]) {
+    private func apply(
+        state: InterventionState,
+        reasons: [AssessmentReason],
+        bypassingLocalInterventionGate: Bool = false
+    ) {
         apply(WorkPatternAssessment(
             state: state,
             totalActiveDuration: state == .protect ? 95 * 60 : state == .drift ? 55 * 60 : 20 * 60,
             currentContinuousActiveDuration: state == .protect ? 95 * 60 : state == .drift ? 55 * 60 : 20 * 60,
             appSwitchCount: 0,
             reasons: reasons
-        ))
+        ), bypassingLocalInterventionGate: bypassingLocalInterventionGate)
     }
 
-    private func apply(_ nextAssessment: WorkPatternAssessment) {
-        guard localControl.permitsIntervention(at: .now) else { return }
+    private func apply(
+        _ nextAssessment: WorkPatternAssessment,
+        bypassingLocalInterventionGate: Bool = false
+    ) {
+        guard bypassingLocalInterventionGate || localControl.permitsIntervention(at: .now) else { return }
         let previousAssessment = assessment
         let wasProtect = previousAssessment.state == .protect
         let careContext = WorkPatternRiskContext(
@@ -475,7 +487,7 @@ final class CompanionStore: ObservableObject {
                 isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
             }
             requestProtectionPresentation()
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp?.activate(ignoringOtherApps: true)
         } else if assessment.state == .protect && !wasProtect {
             hasStartedCountdownForProtectEpisode = false
             protectionSurfaceGate.beginProtectEpisode()
@@ -620,7 +632,7 @@ final class CompanionStore: ObservableObject {
         onCallMessage = "Your on-call override ended. Choose what you need next."
         countdownText = "On-call override ended. No new Lock Screen countdown starts automatically."
         requestProtectionPresentation()
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp?.activate(ignoringOtherApps: true)
     }
 
     private func requestProtectionPresentation() {
