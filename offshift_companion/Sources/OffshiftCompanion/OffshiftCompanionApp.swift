@@ -1,5 +1,6 @@
 import AppKit
 import OffshiftCompanionCore
+import OSLog
 import SwiftUI
 
 @main
@@ -15,15 +16,17 @@ struct OffshiftCompanionApp: App {
 
 @MainActor
 final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
+    private let careLogger = Logger(subsystem: "com.tixo.offshift.companion", category: "care-surface")
     let store = CompanionStore()
     private var emergencyExitGate = EmergencyEscapeExitGate()
     private var localKeyMonitor: Any?
-    private var globalKeyMonitor: Any?
     private var onboardingWindow: NSWindow?
     private var dashboardWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var protectionWindow: NSWindow?
     private var statusItem: NSStatusItem?
+    private var isStatusMenuTracking = false
+    private var isProtectionPresentationPending = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -139,11 +142,28 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
 
     private func showProtection() {
         guard store.shouldKeepProtectionSurfacePresented else { return }
+        // NSMenu runs its own modal event loop. Presenting a key window from a
+        // status-item action before that loop has finished produces a visible
+        // but non-interactive care surface. Close the menu first and resume on
+        // the ordinary app event loop from `menuDidClose`.
+        if isStatusMenuTracking {
+            isProtectionPresentationPending = true
+            careLogger.notice("Deferring care presentation until status menu closes")
+            statusItem?.menu?.cancelTracking()
+            return
+        }
+
+        presentProtectionWindow()
+    }
+
+    private func presentProtectionWindow() {
+        guard store.shouldKeepProtectionSurfacePresented else { return }
         let window = protectionWindow ?? makeProtectionWindow()
         protectionWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installEmergencyExitMonitor()
+        careLogger.notice("Presented interactive care surface")
     }
 
     private func makeProtectionWindow() -> NSWindow {
@@ -154,6 +174,9 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
+        window.onEscapeKey = { [weak self] in
+            self?.recordEmergencyEscape()
+        }
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ProtectionWindowView(store: store) { [weak self] in
             self?.dismissProtection()
@@ -165,13 +188,14 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         removeEmergencyExitMonitor()
         store.protectionSurfaceDidDisappear()
         protectionWindow?.orderOut(nil)
+        careLogger.notice("Dismissed care surface through local action")
     }
 
     /// The emergency exit is intentionally local to the care surface. Installing
     /// the monitor only for that surface preserves standard Escape behavior for
     /// menus and normal windows during ordinary use.
     private func installEmergencyExitMonitor() {
-        guard localKeyMonitor == nil, globalKeyMonitor == nil else { return }
+        guard localKeyMonitor == nil else { return }
 
         emergencyExitGate = EmergencyEscapeExitGate()
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -187,28 +211,11 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
             self.recordEmergencyEscape()
             return nil
         }
-
-        // A screen-saver-level borderless window can be visible without being
-        // the AppKit key window. In that case Escape is delivered to the app
-        // that previously had focus, so a local monitor alone would make the
-        // documented emergency exit unreachable. The global companion monitor
-        // observes that complementary path while a care surface is visible.
-        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == 53 else { return }
-            DispatchQueue.main.async {
-                guard let self,
-                      EmergencyEscapeMonitorPolicy.shouldHandle(
-                          keyCode: event.keyCode,
-                          isProtectionVisible: self.protectionWindow?.isVisible == true
-                      )
-                else { return }
-                self.recordEmergencyEscape()
-            }
-        }
     }
 
     private func recordEmergencyEscape() {
         guard emergencyExitGate.recordEscape(at: Date.now) else { return }
+        careLogger.notice("Emergency exit completed")
         NSApp.terminate(nil)
     }
 
@@ -216,10 +223,6 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         if let localKeyMonitor {
             NSEvent.removeMonitor(localKeyMonitor)
             self.localKeyMonitor = nil
-        }
-        if let globalKeyMonitor {
-            NSEvent.removeMonitor(globalKeyMonitor)
-            self.globalKeyMonitor = nil
         }
         emergencyExitGate = EmergencyEscapeExitGate()
     }
@@ -257,6 +260,21 @@ enum EmergencyEscapeMonitorPolicy {
 }
 
 extension OffshiftAppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === statusItem?.menu else { return }
+        isStatusMenuTracking = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        guard menu === statusItem?.menu else { return }
+        isStatusMenuTracking = false
+        guard isProtectionPresentationPending else { return }
+        isProtectionPresentationPending = false
+        DispatchQueue.main.async { [weak self] in
+            self?.showProtection()
+        }
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.item(at: 0)?.title = store.isOffshiftEnabled ? "Offshift is on — Open Today" : "Offshift is off — Open Today"
     }
@@ -264,8 +282,20 @@ extension OffshiftAppDelegate: NSMenuDelegate {
 
 /// A borderless care surface still needs keyboard focus for its visible
 /// controls and the local four-Escape emergency exit. AppKit otherwise
-/// refuses to make a bare borderless NSWindow key.
+/// refuses to make a bare borderless NSWindow key. `sendEvent` provides the
+/// final Escape path without relying on a global event monitor (which macOS
+/// may withhold until Input Monitoring is granted).
 private final class CareScreenWindow: NSWindow {
+    var onEscapeKey: (() -> Void)?
+
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, event.keyCode == 53 {
+            onEscapeKey?()
+            return
+        }
+        super.sendEvent(event)
+    }
 }

@@ -70,12 +70,12 @@ final class InterventionWindowProbe: NSView {
             window.isOpaque = true
             window.backgroundColor = .black
             window.hasShadow = false
-            // Care is a reversible intervention, never a system lock. Levels
-            // above `.floating` can prevent a SwiftUI window from receiving
-            // pointer and keyboard input, which would turn this screen into a
-            // trap. Keep the full-screen presentation but use the reliable,
-            // interactive AppKit level for every care surface.
-            window.level = .floating
+            // Care is a reversible intervention, never a system lock. The
+            // status-bar level covers macOS chrome (menu bar and Dock) while
+            // remaining an ordinary interactive AppKit window. The former
+            // screen-saver level hid chrome too, but could make SwiftUI input
+            // unreachable and turn this surface into a trap.
+            window.level = .statusBar
             window.ignoresMouseEvents = false
             window.collectionBehavior = self.requiresMonitorCover
                 ? [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
