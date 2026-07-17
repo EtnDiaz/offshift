@@ -7,32 +7,6 @@ struct OffshiftCompanionApp: App {
     @NSApplicationDelegateAdaptor(OffshiftAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarContent(store: appDelegate.store, showDashboard: appDelegate.showDashboard)
-        } label: {
-            if let image = OffshiftBrandMark.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-                    .accessibilityLabel("Offshift")
-            } else {
-                Image(systemName: "moon.stars")
-            }
-        }
-        .commands {
-            #if DEBUG
-            CommandMenu("Developer") {
-                Button("Routine fixture") { appDelegate.store.simulateRoutine() }
-                Button("Drift fixture") { appDelegate.store.simulateDrift() }
-                Button("Protect fixture") { appDelegate.store.simulateProtect() }
-                Button("Gentle night fixture") { appDelegate.store.simulateGentleNightCareNudge() }
-                Button("Late-session fixture") { appDelegate.store.simulateLateSessionRisk() }
-            }
-            #endif
-        }
-
         Settings {
             CompanionSettingsView(store: appDelegate.store)
         }
@@ -46,13 +20,16 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     private var localKeyMonitor: Any?
     private var onboardingWindow: NSWindow?
     private var dashboardWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     private var protectionWindow: NSWindow?
+    private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         if let image = OffshiftBrandMark.image {
             NSApp.applicationIconImage = image
         }
+        installStatusItem()
         store.onProtectionRequested = { [weak self] in
             self?.showProtection()
         }
@@ -66,6 +43,11 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
             showOnboarding()
         }
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--settings-preview") {
+            DispatchQueue.main.async { [weak self] in
+                self?.showSettings()
+            }
+        }
         if ProcessInfo.processInfo.arguments.contains("--care-preview") {
             DispatchQueue.main.async { [weak self] in
                 self?.store.showDeveloperCarePreview()
@@ -80,9 +62,54 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func installStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.isVisible = true
+        item.button?.image = NSImage(systemSymbolName: "moon.stars.fill", accessibilityDescription: "Offshift")
+        item.button?.image?.isTemplate = true
+        item.button?.toolTip = "Offshift"
+        item.menu = makeStatusMenu()
+        statusItem = item
+    }
+
+    private func makeStatusMenu() -> NSMenu {
+        let menu = NSMenu(title: "Offshift")
+        menu.delegate = self
+        menu.addItem(withTitle: "Open Today", action: #selector(openToday), keyEquivalent: "")
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        #if DEBUG
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Developer: care screen", action: #selector(showDeveloperCarePreview), keyEquivalent: "")
+        #endif
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Offshift", action: #selector(quit), keyEquivalent: "q")
+        return menu
+    }
+
+    @objc private func openToday() { showDashboard() }
+
+    @objc private func openSettings() {
+        showSettings()
+    }
+
+    #if DEBUG
+    @objc private func showDeveloperCarePreview() {
+        store.showDeveloperCarePreview()
+    }
+    #endif
+
+    @objc private func quit() { NSApp.terminate(nil) }
+
     func showDashboard() {
         let window = dashboardWindow ?? makeDashboardWindow()
         dashboardWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showSettings() {
+        let window = settingsWindow ?? makeSettingsWindow()
+        settingsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -99,6 +126,20 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
         window.center()
         window.contentView = NSHostingView(rootView: CompanionDashboardView(store: store))
+        return window
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Settings"
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.contentView = NSHostingView(rootView: CompanionSettingsView(store: store))
         return window
     }
 
@@ -146,6 +187,12 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         onboardingWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+extension OffshiftAppDelegate: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.item(at: 0)?.title = store.isOffshiftEnabled ? "Offshift is on — Open Today" : "Offshift is off — Open Today"
     }
 }
 

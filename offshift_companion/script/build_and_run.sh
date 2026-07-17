@@ -87,6 +87,7 @@ cat >"$INFO_PLIST" <<PLIST
 <key>CFBundleVersion</key><string>2</string>
 <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
 <key>LSUIElement</key><true/>
+<key>NSFocusStatusUsageDescription</key><string>Offshift reads only whether a Focus is active on this Mac to explain a local quiet-hours suggestion. It does not read the Focus name, calendar, notifications, or screen content.</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST
@@ -116,13 +117,15 @@ codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 # the macOS GUI lifecycle, icon, and menu-bar identity intact.
 open_app() { /usr/bin/open "$APP_BUNDLE"; }
 open_care_preview() { /usr/bin/open "$APP_BUNDLE" --args --care-preview; }
+open_settings_preview() { /usr/bin/open "$APP_BUNDLE" --args --settings-preview; }
 case "$MODE" in
   run) open_app ;;
   --care-preview|care-preview) open_care_preview ;;
+  --settings-preview|settings-preview) open_settings_preview ;;
   --bundle|bundle) ;;
   --debug|debug) lldb -- "$APP_BINARY" ;;
   --logs|logs) open_app; /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\"" ;;
   --telemetry|telemetry) open_app; /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\"" ;;
   --verify|verify) open_app; sleep 1; pgrep -x "$APP_NAME" >/dev/null ;;
-  *) echo "usage: $0 [run|--care-preview|--bundle|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  *) echo "usage: $0 [run|--care-preview|--settings-preview|--bundle|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
 esac
