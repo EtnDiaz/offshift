@@ -645,4 +645,3 @@ Use the companion for:
 ## Key recommendation
 
 Keep Codex sync local-first and deny-by-default: the only safe way to connect Codex awareness to Offshift is through coarse, consented lifecycle events from the Mac, with outbound webhooks restricted to an explicit allowlist of named targets and event types. If a payload cannot be explained in one sentence without mentioning content, credentials, or commands, it should not cross the boundary.
-
