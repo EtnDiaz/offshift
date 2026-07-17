@@ -18,6 +18,17 @@ ASSET_CATALOG="$ROOT_DIR/Resources/AppIcon/Assets.xcassets"
 ASSET_INFO_PLIST="$APP_CONTENTS/asset-info.plist"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+# LaunchServices may still be releasing the previous bundle for a short moment
+# after the process exits. Do not replace or sign that bundle until it has gone:
+# otherwise macOS can attach FinderInfo while codesign is walking its contents.
+for _ in {1..30}; do
+  pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+  sleep 0.1
+done
+if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+  echo "Offshift did not exit before rebuild" >&2
+  exit 1
+fi
 cd "$ROOT_DIR"
 swift build
 bash ./script/generate_app_icon.sh
@@ -57,8 +68,14 @@ rm -f "$ASSET_INFO_PLIST"
 # SwiftPM produces the executable, while this script stages the app bundle.
 # Sign that completed bundle ad hoc so Launch Services treats its Info.plist
 # and resources (including the icon) as one local development artifact.
-xattr -cr "$APP_BUNDLE"
+# Finder can write this harmless display metadata after a bundle is opened, but
+# codesign correctly rejects it as unsigned bundle data. Remove it explicitly
+# (and recursively) from the freshly staged artifact before its final signing.
+xattr -cr "$APP_BUNDLE" || true
+xattr -d com.apple.FinderInfo "$APP_BUNDLE" 2>/dev/null || true
+xattr -d com.apple.fileprovider.fpfs#P "$APP_BUNDLE" 2>/dev/null || true
 codesign --force --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 # `open -n` asks LaunchServices for a new instance each time. A rebuilt,
 # ad-hoc-signed dev bundle then leaves stale entries in Launchpad. The process
