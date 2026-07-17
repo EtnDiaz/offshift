@@ -40,6 +40,9 @@ final class CompanionStore: ObservableObject {
     let lockScreenSettings = LocalLockScreenSettings()
     let nightCareSettings = NightCareSettings()
     let focusStatusSettings = FocusStatusSettings()
+    /// The app delegate owns the actual local NSWindow. The store only emits a
+    /// request after local policy has decided a care surface is appropriate.
+    var onProtectionRequested: (() -> Void)?
 
     /// A short, always-visible local interval: the intervention wall appears first,
     /// then a separately enabled local rule may request the real system Lock Screen.
@@ -467,7 +470,7 @@ final class CompanionStore: ObservableObject {
                 protectionSurfaceGate.beginProtectEpisode()
                 isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
             }
-            protectionPresentationToken &+= 1
+            requestProtectionPresentation()
             NSApp.activate(ignoringOtherApps: true)
         } else if assessment.state == .protect && !wasProtect {
             hasStartedCountdownForProtectEpisode = false
@@ -612,8 +615,13 @@ final class CompanionStore: ObservableObject {
         else { return }
         onCallMessage = "Your on-call override ended. Choose what you need next."
         countdownText = "On-call override ended. No new Lock Screen countdown starts automatically."
-        protectionPresentationToken &+= 1
+        requestProtectionPresentation()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func requestProtectionPresentation() {
+        protectionPresentationToken &+= 1
+        onProtectionRequested?()
     }
 
     private func tickCountdown() {

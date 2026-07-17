@@ -3,7 +3,7 @@ import OffshiftCompanionCore
 
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
-    @Environment(\.dismissWindow) private var dismissWindow
+    let onDismiss: () -> Void
     @AccessibilityFocusState private var isCareMessageFocused: Bool
 
     var body: some View {
@@ -68,6 +68,9 @@ struct ProtectionWindowView: View {
                         .buttonStyle(.plain)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
+                    Text("Emergency exit: press Escape four times")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.48))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 48)
@@ -84,38 +87,37 @@ struct ProtectionWindowView: View {
 
     private func takeFiveAndDismiss() {
         store.takeFive()
-        dismissWindow(id: "protection")
+        onDismiss()
     }
 
     private func pauseAndDismiss() {
         store.pauseUntilTomorrow()
-        dismissWindow(id: "protection")
+        onDismiss()
     }
 
     private func grantOnCallAndDismiss() {
         guard store.grantOnCallOverride() else { return }
-        dismissWindow(id: "protection")
+        onDismiss()
     }
 
     private func turnOffAndDismiss() {
         store.disableOffshift()
-        dismissWindow(id: "protection")
+        onDismiss()
     }
 }
 
 struct MenuBarContent: View {
     @ObservedObject var store: CompanionStore
-    @Environment(\.openWindow) private var openWindow
+    let showDashboard: () -> Void
 
     var body: some View {
         Text("Offshift is \(store.isOffshiftEnabled ? "on" : "off")")
-        Button("Show Today") { openWindow(id: "dashboard") }
+        Button("Show Today") { showDashboard() }
         SettingsLink { Text("Settings…") }
         #if DEBUG
         Divider()
         Button("Developer: care screen") {
             store.showDeveloperCarePreview()
-            openWindow(id: "protection")
         }
         #endif
         Divider()

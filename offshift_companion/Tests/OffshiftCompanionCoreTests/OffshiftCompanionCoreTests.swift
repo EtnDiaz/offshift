@@ -193,22 +193,22 @@ final class CareScreenTriggerSourceTests: XCTestCase {
 final class EmergencyEscapeExitGateTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
-    func testFourFastEscapePressesRequestLocalExit() {
+    func testFourEscapePressesInsideTheDeliberateExitWindowRequestLocalExit() {
         var gate = EmergencyEscapeExitGate()
 
         XCTAssertFalse(gate.recordEscape(at: now))
-        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(0.4)))
-        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(0.8)))
-        XCTAssertTrue(gate.recordEscape(at: now.addingTimeInterval(1.2)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(1)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2)))
+        XCTAssertTrue(gate.recordEscape(at: now.addingTimeInterval(3)))
     }
 
     func testSlowEscapePressesDoNotAccumulateIntoAnExit() {
         var gate = EmergencyEscapeExitGate()
 
         XCTAssertFalse(gate.recordEscape(at: now))
-        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.1)))
-        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.5)))
-        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(2.9)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(10.1)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(20.2)))
+        XCTAssertFalse(gate.recordEscape(at: now.addingTimeInterval(30.3)))
     }
 }
 

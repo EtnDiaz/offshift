@@ -256,7 +256,7 @@ public struct EmergencyEscapeExitGate: Equatable, Sendable {
     private let requiredPresses: Int
     private let interval: TimeInterval
 
-    public init(requiredPresses: Int = 4, interval: TimeInterval = 2) {
+    public init(requiredPresses: Int = 4, interval: TimeInterval = 10) {
         precondition(requiredPresses > 0)
         precondition(interval > 0)
         self.requiredPresses = requiredPresses

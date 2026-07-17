@@ -26,10 +26,11 @@ returns the app to the menu bar; it does not quit Offshift.
 The black care screen may be opened only by local behaviour policy or by a
 Debug-only **Developer: care screen** preview. The developer preview is
 explicitly local, does not persist, and suppresses the optional Lock Screen
-countdown and smart-home actions.
+countdown and smart-home actions. `script/build_and_run.sh --care-preview`
+opens this same debug-only route for visual QA without a remote command.
 
 At every point in the companion, including the borderless care screen, four
-Escape key presses inside a two-second local window terminate Offshift. This
+Escape key presses inside a ten-second local window terminate Offshift. This
 is a local emergency exit: it stops the process rather than attempting a
 remote state change, and it must never be reachable from MCP, the Worker, or
 any smart-home integration.

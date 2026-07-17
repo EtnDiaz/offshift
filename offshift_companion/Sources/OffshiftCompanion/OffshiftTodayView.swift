@@ -3,7 +3,6 @@ import SwiftUI
 
 struct CompanionDashboardView: View {
     @ObservedObject var store: CompanionStore
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ScrollView {
@@ -82,9 +81,6 @@ struct CompanionDashboardView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
             }
-        }
-        .onChange(of: store.protectionPresentationToken) { _, _ in
-            openWindow(id: "protection")
         }
     }
 

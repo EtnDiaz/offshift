@@ -22,7 +22,7 @@ struct OffshiftBrandMarkView: View {
     }
 }
 
-private enum OffshiftBrandMark {
+enum OffshiftBrandMark {
     static let image: NSImage? = {
         guard let url = Bundle.module.url(
             forResource: "sleeping-codex-logo",
