@@ -65,9 +65,10 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.isVisible = true
-        item.button?.image = NSImage(systemSymbolName: "moon.stars.fill", accessibilityDescription: "Offshift")
-        item.button?.image?.isTemplate = true
-        item.button?.toolTip = "Offshift"
+        // Keep a text glyph as the primary mark. It remains visible even when
+        // an image asset is unavailable or the system declines an SF Symbol.
+        item.button?.title = "☾"
+        item.button?.toolTip = "Offshift — open Today and Settings"
         item.menu = makeStatusMenu()
         statusItem = item
     }
