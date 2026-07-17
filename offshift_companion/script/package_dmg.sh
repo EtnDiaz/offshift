@@ -14,6 +14,22 @@ rm -rf "$STAGING_DIR" "$DMG_PATH"
 mkdir -p "$RELEASE_DIR"
 OFFSHIFT_BUILD_DIR="$STAGING_DIR" "$ROOT_DIR/script/build_and_run.sh" --bundle
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
-hdiutil create -volname "Offshift" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_PATH" >/dev/null
+
+# The companion is intentionally menu-bar-first, so a bare app bundle in a
+# DMG reads as a failed launch. Present the conventional install affordance and
+# state where the first-run window and later controls live.
+ln -s /Applications "$STAGING_DIR/Applications"
+cat >"$STAGING_DIR/Install Offshift.txt" <<'TEXT'
+Install Offshift
+
+1. Drag Offshift.app onto the Applications shortcut in this window.
+2. Open Offshift from Applications.
+
+On the first launch, Offshift opens a short setup window. Afterwards it lives
+in the menu bar (the moon icon), not in the Dock. Choose “Open Today” from the
+menu bar whenever you want to see its status or settings.
+TEXT
+
+hdiutil create -volname "Offshift" -srcfolder "$STAGING_DIR" -ov -format UDZO "$DMG_PATH" >/dev/null
 test -s "$DMG_PATH"
 printf '%s\n' "$DMG_PATH"

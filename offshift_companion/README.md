@@ -35,7 +35,10 @@ Create a local DMG without launching the app:
 The runnable development bundle is staged outside the source checkout under
 `$TMPDIR/OffshiftDeveloperBuild`, so running from a workspace in `~/Documents`
 does not request access to Documents or create Spotlight app entries. The DMG
-is written to `release/` and is ad-hoc signed
+includes an `Applications` shortcut and install note: drag `Offshift.app` to
+Applications, then open it there. On first launch the setup window appears;
+after setup, Offshift is intentionally available from the menu bar rather than
+the Dock. The DMG is written to `release/` and is ad-hoc signed
 for development only; a public release needs Developer ID signing and
 notarization credentials.
 
