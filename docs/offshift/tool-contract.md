@@ -21,7 +21,7 @@ No MCP tool can lock a device, end a Codex session, inspect source code, upload 
 
 ## Render tool
 
-On the public Worker host, `render_offshift_dashboard` returns the final snapshot, behaviour explanation, and plan and attaches the versioned `ui://widget/offshift-worker-v4.html` resource. It is the only model-visible tool that mounts the widget and mints a five-minute dashboard capability in result `_meta`, never in model-visible content. Component-initiated mutations use `tools/call` through the MCP Apps bridge and must present that server-verified capability. The separate local Node demo has its own versioned resource URI and is not the public deployment.
+On the public Worker host, `render_offshift_dashboard` returns the final snapshot, behaviour explanation, and plan and attaches the versioned `ui://widget/offshift-worker-v5.html` resource. It is the only model-visible tool that mounts the widget and mints a five-minute dashboard capability in result `_meta`, never in model-visible content. Component-initiated mutations use `tools/call` through the MCP Apps bridge and must present that server-verified capability. The resource shell explicitly loads its compiled stylesheet from the CSP-allowlisted Worker asset origin. The separate local Node demo has its own versioned resource URI and is not the public deployment.
 
 ## Golden prompts
 

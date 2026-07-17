@@ -190,6 +190,17 @@ final class CompanionStore: ObservableObject {
         careScreenTriggerSource.requiresMonitorCoverWindow
     }
 
+    var isDeveloperCarePreview: Bool {
+        careScreenTriggerSource == .developerPreview
+    }
+
+    var hasActivePreLockCountdown: Bool {
+        if case .countingDown = controller.countdown.state {
+            return true
+        }
+        return false
+    }
+
     func simulateRoutine() {
         careScreenTriggerSource = .localBehaviour
         apply(state: .routine, reasons: [.belowDriftThreshold])
@@ -258,8 +269,19 @@ final class CompanionStore: ObservableObject {
     }
 
     func takeFive() {
-        sampler.resetActivityWindow()
-        countdownText = "Take five. Offshift will check local aggregate activity again when you return."
+        let now = Date.now
+        let until = now.addingTimeInterval(5 * 60)
+        // Resetting the sampler alone is insufficient: the next active sample
+        // can immediately re-evaluate a still-open Protect episode and show
+        // the care surface again. A reset is a named five-minute local pause.
+        guard localControl.pause(until: until, at: now) else {
+            sampler.resetActivityWindow(at: now)
+            countdownText = "Take five. Offshift will check local aggregate activity again when you return."
+            return
+        }
+        persistLocalControl()
+        sampler.resetActivityWindow(at: now)
+        suppressLocalInterventions(message: "Take five. Offshift notices are paused until \(until.formatted(date: .omitted, time: .shortened)).")
     }
 
     func pauseNoticesForFifteenMinutes() {

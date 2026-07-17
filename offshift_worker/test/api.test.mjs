@@ -66,7 +66,7 @@ test("health returns a stable service response", async () => {
     status: "ok",
     service: "offshift-demo-api",
     mcpPath: "/mcp",
-    widgetUri: "ui://widget/offshift-worker-v4.html",
+    widgetUri: "ui://widget/offshift-worker-v5.html",
     codexRelayPath: "/v1/codex/events",
   });
 });
@@ -278,14 +278,14 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
   assert.deepEqual(schedule._meta.ui.visibility, ["app"]);
   assert.deepEqual(schedule.inputSchema.required, ["idempotencyKey", "widgetCapability"]);
   assert.equal(schedule.inputSchema.properties.widgetCapability.minLength, 32);
-  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v4.html");
-  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v4.html");
+  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v5.html");
+  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v5.html");
   assert.equal(tools.some((tool) => /webhook|lock|command/i.test(tool.name)), false);
 });
 
 test("MCP resource read returns the React widget with a tightly scoped CSP", async () => {
   const worker = app();
-  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v4.html" });
+  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v5.html" });
   assert.equal(contents.length, 1);
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.deepEqual(contents[0]._meta.ui.csp, {
@@ -293,6 +293,7 @@ test("MCP resource read returns the React widget with a tightly scoped CSP", asy
     resourceDomains: ["https://offshift-demo-api.tixo-digital.workers.dev"],
   });
   assert.match(contents[0].text, /offshift\.js/);
+  assert.match(contents[0].text, /rel="stylesheet" href="https:\/\/offshift-demo-api\.tixo-digital\.workers\.dev\/offshift\.css"/);
   assert.doesNotMatch(contents[0].text, /window\.openai/);
 });
 

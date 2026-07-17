@@ -189,9 +189,9 @@ final class CareScreenTriggerSourceTests: XCTestCase {
         XCTAssertFalse(CareScreenTriggerSource.developerPreview.permitsAutomaticLockCountdown)
     }
 
-    func testOnlyLocalBehaviourRequiresTheMonitorCoverWindow() {
+    func testCarePreviewMatchesTheProductionMonitorCoverWindow() {
         XCTAssertTrue(CareScreenTriggerSource.localBehaviour.requiresMonitorCoverWindow)
-        XCTAssertFalse(CareScreenTriggerSource.developerPreview.requiresMonitorCoverWindow)
+        XCTAssertTrue(CareScreenTriggerSource.developerPreview.requiresMonitorCoverWindow)
     }
 }
 

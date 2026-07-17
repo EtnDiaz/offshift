@@ -49,7 +49,7 @@ The endpoint follows the project's interactive-decoupled Apps SDK shape:
 | `resume_reminders` | Mutation | Explicitly ends the on-call exception; requires an idempotency key and dashboard capability. |
 | `render_offshift_dashboard` | Render | The only tool with `_meta.ui.resourceUri` and `openai/outputTemplate`. |
 
-`resources/read` serves the versioned `ui://widget/offshift-worker-v4.html` resource as `text/html;profile=mcp-app`. Its deliberate CSP has empty `connectDomains` and an allowlist only for the Worker-hosted React assets. The widget uses the MCP Apps bridge; it does not depend on `window.openai`.
+`resources/read` serves the versioned `ui://widget/offshift-worker-v5.html` resource as `text/html;profile=mcp-app`. Its deliberate CSP has empty `connectDomains` and an allowlist only for the Worker-hosted React assets; the shell explicitly loads the compiled `offshift.css` from that origin. The widget uses the MCP Apps bridge; it does not depend on `window.openai`.
 
 The Worker injects the repository's built React dashboard as a versioned static asset. Read-only tools remain model-visible; all mutations are `app`-visible only and originate from an explicit dashboard click. `render_offshift_dashboard` mints a random, opaque, five-minute `widgetCapability` for that dashboard only. It is returned exclusively in the tool result `_meta` under `offshift/widgetCapability`; it is never included in tool text or `structuredContent`. The widget holds it only in memory and supplies it with every mutation. The Worker rejects missing, invalid, and expired capabilities server-side.
 
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8787/mcp \
 
 curl -X POST http://localhost:8787/mcp \
   -H 'content-type: application/json' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://widget/offshift-worker-v4.html"}}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://widget/offshift-worker-v5.html"}}'
 
 curl 'http://localhost:8787/v1/behavior/snapshot?userId=ada'
 ```

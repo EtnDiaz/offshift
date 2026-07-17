@@ -27,9 +27,15 @@ The ChatGPT App is the planner and dashboard. A local companion owns desktop not
 
 `offshift_server_node` serves `/mcp` through a local Node process. The widget is bundled into a self-contained MCP resource so the ChatGPT iframe does not depend on external asset loading.
 
+For the first single-user ChatGPT pilot, `tunnel-client` may expose that local
+fixture server through an OpenAI Secure MCP Tunnel. It remains loopback-only
+from the developer's perspective and sends only deterministic demo data;
+neither the tunnel nor the local Node server connects to the macOS companion.
+See [ADR 0022](../adr/0022-private-secure-mcp-tunnel-pilot.md).
+
 ### Cloudflare Worker demo host
 
-`offshift_worker` is the public HTTPS MCP demo host at `https://offshift-demo-api.tixo-digital.workers.dev/mcp`. It serves the versioned `ui://widget/offshift-worker-v4.html` React resource. Rendering mints a short-lived, opaque dashboard capability in result metadata; the Worker validates it before each bounded plan mutation and keeps plan/idempotency state scoped to that in-memory capability session. This is intentionally non-durable demo data, not identity or device authority. D1 persistence, device registration, and scheduled jobs are not part of the MVP and would require a new product decision.
+`offshift_worker` is the public HTTPS MCP **demo** host at `https://offshift-demo-api.tixo-digital.workers.dev/mcp`. It serves the versioned `ui://widget/offshift-worker-v5.html` React resource, with its compiled CSS loaded from the Worker asset origin explicitly allowlisted by widget CSP. Rendering mints a short-lived, opaque dashboard capability in result metadata; the Worker validates it before each bounded plan mutation and keeps plan/idempotency state scoped to that in-memory capability session. This is intentionally non-durable fixture data, not user identity, tenant isolation, or device authority. It must not be used for real personal status or schedules. A public multi-user service requires OAuth 2.1, server-derived account subjects, tenant-scoped durable storage, and explicit companion pairing under ADR 0021.
 
 ### Local companion
 

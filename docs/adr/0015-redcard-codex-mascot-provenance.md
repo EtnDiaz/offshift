@@ -6,6 +6,8 @@
 
 **Supersedes:** ADR 0005
 
+**Superseded by:** ADR 0023 for public redistribution conditions
+
 ## Context
 
 The product owner clarified that the desired visual identity is the Codex
@@ -39,3 +41,6 @@ authority over a device, smart-home scene, or Codex session.
   materials; it must not present the imported mascot as original Nox artwork.
 - Any distribution beyond this prototype needs a product/legal review of the
   upstream license, notices, and brand presentation.
+
+This last consequence is superseded by ADR 0023 after verification of the
+upstream Apache-2.0 license and `NOTICE`.

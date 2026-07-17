@@ -11,53 +11,64 @@ struct ProtectionWindowView: View {
             Color.black.ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 26) {
-                    RedCardCodexSleepMascotView(size: 270)
+                VStack(spacing: 22) {
+                    if store.isDeveloperCarePreview {
+                        Label("Preview — Lock Screen and smart-home actions are disabled", systemImage: "eye")
+                            .font(.headline)
+                            .foregroundStyle(.cyan)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(.white.opacity(0.09), in: Capsule())
+                            .accessibilityLabel("Developer preview. Lock Screen and smart-home actions are disabled.")
+                    }
+                    RedCardCodexSleepMascotView(size: 310)
                     Text(store.careHeadline)
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
                         .multilineTextAlignment(.center)
                         .accessibilityFocused($isCareMessageFocused)
                     Text(store.careMessage)
-                        .font(.title2)
+                        .font(.system(size: 23, weight: .regular, design: .rounded))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white.opacity(0.78))
-                        .frame(maxWidth: 760)
+                        .frame(maxWidth: 820)
                     Text("Nothing here closes Codex, your terminal, or your work.")
                         .font(.headline)
                         .foregroundStyle(.white.opacity(0.9))
 
-                    VStack(spacing: 10) {
+                    VStack(spacing: 8) {
                         Text("Why now")
                             .font(.headline)
                         Text(store.careReason)
-                        Text(store.countdownText)
-                            .accessibilityLabel("Lock Screen status: \(store.countdownText)")
+                        if store.hasActivePreLockCountdown || store.isDeveloperCarePreview {
+                            Text(store.countdownText)
+                                .accessibilityLabel("Lock Screen status: \(store.countdownText)")
+                        }
                     }
-                    .font(.callout)
+                    .font(.system(size: 17, weight: .regular, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.82))
                     .frame(maxWidth: 720)
 
-                    VStack(spacing: 12) {
+                    VStack(spacing: 14) {
                         Button("Start a 5-minute reset") { takeFiveAndDismiss() }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
                             .keyboardShortcut(.defaultAction)
                             .accessibilityHint("Closes this local care surface and starts a five-minute reset. Your work stays open.")
-                        Button(store.pauseActionLabel) { pauseAndDismiss() }
-                            .buttonStyle(.bordered)
-                        if store.isProtectState {
-                            HStack {
-                                Button("On call for 15 min") { grantOnCallAndDismiss() }
-                                Button("Cancel countdown") { store.cancelPreLockCountdown() }
-                            }
-                            .buttonStyle(.bordered)
+                        if store.hasActivePreLockCountdown {
+                            Button("Cancel Lock Screen countdown") { store.cancelPreLockCountdown() }
+                                .buttonStyle(.bordered)
+                                .accessibilityHint("Cancels the active local Lock Screen countdown.")
+                        } else if store.isProtectState {
+                            Button("I’m on call — 15 minutes") { grantOnCallAndDismiss() }
+                                .buttonStyle(.bordered)
+                                .accessibilityHint("Pauses Offshift nudges for fifteen minutes, then returns to your local settings.")
                         } else {
-                            Text("This is a gentle night nudge. It cannot start a Lock Screen countdown.")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.78))
+                            Button(store.pauseActionLabel) { pauseAndDismiss() }
+                                .buttonStyle(.bordered)
                         }
                     }
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
 
                     if let onCallMessage = store.onCallMessage {
                         Text(onCallMessage)
@@ -73,10 +84,10 @@ struct ProtectionWindowView: View {
                         .foregroundStyle(.white.opacity(0.48))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
+                .padding(.vertical, 56)
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 48)
+            .padding(.horizontal, 64)
         }
         .background(InterventionWindowConfigurator(
             requiresMonitorCover: store.careScreenRequiresMonitorCover,

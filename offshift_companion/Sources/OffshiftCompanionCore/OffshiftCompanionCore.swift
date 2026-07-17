@@ -248,11 +248,10 @@ public enum CareScreenTriggerSource: Equatable, Sendable {
         self == .localBehaviour
     }
 
-    /// The real care surface must cover the monitor above ordinary windows.
-    /// The Debug-only preview deliberately uses a lower level so local QA can
-    /// inspect the identical content and verify the emergency exit.
+    /// Care preview matches the real monitor-covering surface. It differs only
+    /// in authority: it never starts a Lock Screen countdown or smart-home action.
     public var requiresMonitorCoverWindow: Bool {
-        self == .localBehaviour
+        true
     }
 }
 

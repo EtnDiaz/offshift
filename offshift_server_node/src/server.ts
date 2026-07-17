@@ -105,7 +105,7 @@ function createOffshiftServer(): McpServer {
     description: "Use this when the user asks about their current focus session or next suggested break.",
     inputSchema: {},
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true },
-    outputSchema: { snapshot: z.object({ focusMinutes: z.number(), thresholdMinutes: z.number(), suggestedBreakMinutes: z.number(), activeAppCategory: z.literal("coding"), privacyNote: z.string() }) },
+    outputSchema: { snapshot: z.object({ focusMinutes: z.number(), thresholdMinutes: z.number(), suggestedBreakMinutes: z.number(), privacyNote: z.string() }) },
     _meta: dataToolMeta,
   }, async () => ({ structuredContent: { snapshot: focusSnapshot() }, content: [{ type: "text", text: "The demo focus threshold has been reached; a five-minute break is suggested." }] }));
 

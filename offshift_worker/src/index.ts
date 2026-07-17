@@ -11,7 +11,8 @@ const MIN_BREAK_DURATION_MINUTES = 1;
 const MAX_BREAK_DURATION_MINUTES = 30;
 const MCP_PROTOCOL_VERSION = "2026-01-26";
 const MCP_SERVER_VERSION = "0.5.0";
-const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v4.html";
+// Bump this whenever the document shell changes: ChatGPT may cache a ui:// resource.
+const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v5.html";
 const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
 const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
@@ -104,7 +105,7 @@ interface WorkerDependencies {
 }
 
 function widgetHtml(assetOrigin: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body><div id="offshift-root"></div><script type="module" src="${assetOrigin}/offshift.js"></script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="stylesheet" href="${assetOrigin}/offshift.css" /></head><body><div id="offshift-root"></div><script type="module" src="${assetOrigin}/offshift.js"></script></body></html>`;
 }
 
 const MCP_TOOLS = [

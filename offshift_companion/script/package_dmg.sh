@@ -14,6 +14,8 @@ rm -rf "$STAGING_DIR" "$DMG_PATH"
 mkdir -p "$RELEASE_DIR"
 OFFSHIFT_BUILD_DIR="$STAGING_DIR" "$ROOT_DIR/script/build_and_run.sh" --bundle
 test -f "$APP_BUNDLE/Contents/Resources/ThirdParty/RedCard/brand/sleeping-codex-logo.png"
+test -f "$APP_BUNDLE/Contents/Resources/ThirdParty/RedCard/LICENSE-APACHE-2.0.txt"
+test -f "$APP_BUNDLE/Contents/Resources/ThirdParty/RedCard/NOTICE"
 plutil -extract NSFocusStatusUsageDescription raw "$APP_BUNDLE/Contents/Info.plist" >/dev/null
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 

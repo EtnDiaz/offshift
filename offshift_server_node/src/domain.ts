@@ -7,7 +7,6 @@ export type BreakStatus = "suggested" | "scheduled" | "snoozed" | "started" | "o
 export type WorkPatternLevel = "routine" | "drift" | "protect";
 
 export interface FocusSnapshot {
-  activeAppCategory: "coding";
   focusMinutes: number;
   thresholdMinutes: number;
   suggestedBreakMinutes: number;
@@ -42,7 +41,6 @@ export function createDemoState(): DemoState {
 
 export function focusSnapshot(): FocusSnapshot {
   return {
-    activeAppCategory: "coding",
     focusMinutes: 52,
     thresholdMinutes: 50,
     suggestedBreakMinutes: 5,
