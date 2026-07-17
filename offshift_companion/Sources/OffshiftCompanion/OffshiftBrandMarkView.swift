@@ -22,6 +22,7 @@ struct OffshiftBrandMarkView: View {
     }
 }
 
+@MainActor
 enum OffshiftBrandMark {
     static let image: NSImage? = {
         guard let url = Bundle.module.url(
