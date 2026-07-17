@@ -17,6 +17,10 @@ const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
 const WIDGET_CAPABILITY_TTL_MS = 5 * 60_000;
 const WIDGET_CAPABILITY_META_KEY = "offshift/widgetCapability";
+const CODEX_EVENT_TTL_MS = 5 * 60_000;
+const CODEX_SYNC_STALE_AFTER_MS = 15 * 60_000;
+const CODEX_EVENT_VERSION = "2026-07-17";
+const CODEX_RELAY_PATH = "/v1/codex/events";
 
 const DATA_TOOL_META = { ui: { visibility: ["model"] } };
 const INTERACTIVE_TOOL_META = { ui: { visibility: ["app"] } };
@@ -39,6 +43,29 @@ interface AssetBinding {
 
 interface WorkerEnvironment {
   ASSETS?: AssetBinding;
+  CODEX_RELAY_SECRET?: string;
+}
+
+type CodexEventType = "session.started" | "session.heartbeat" | "session.ended";
+
+interface CodexSyncEvent {
+  version: typeof CODEX_EVENT_VERSION;
+  eventId: string;
+  installationId: string;
+  type: CodexEventType;
+  occurredAt: string;
+}
+
+interface CodexSyncStatus {
+  state: "not-connected" | "active" | "stale";
+  lastEventAt: string | null;
+  sessionActive: boolean;
+  privacyNote: string;
+}
+
+interface CodexRelayState {
+  seenEventIds: Map<string, number>;
+  statusByInstallation: Map<string, CodexSyncStatus>;
 }
 
 interface DashboardPlan {
@@ -223,6 +250,10 @@ export function createWorker(
   options: WorkerOptions = {},
 ): WorkerHandler {
   const dashboardSessions = new Map<string, DashboardSession>();
+  const codexRelayState: CodexRelayState = {
+    seenEventIds: new Map(),
+    statusByInstallation: new Map(),
+  };
   const dependencies: WorkerDependencies = {
     now: options.now ?? Date.now,
     createWidgetCapability: options.createWidgetCapability ?? createOpaqueWidgetCapability,
@@ -233,7 +264,7 @@ export function createWorker(
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
 
       try {
-        return await route(request, store, dashboardSessions, widgetAssetOrigin, dependencies, env as WorkerEnvironment);
+        return await route(request, store, dashboardSessions, codexRelayState, widgetAssetOrigin, dependencies, env as WorkerEnvironment);
       } catch (error) {
         if (error instanceof ApiError) return json({ error: error.message }, error.status);
         return json({ error: "Internal server error" }, 500);
@@ -249,6 +280,7 @@ async function route(
   request: Request,
   store: DemoStore,
   dashboardSessions: Map<string, DashboardSession>,
+  codexRelayState: CodexRelayState,
   widgetAssetOrigin: string,
   dependencies: WorkerDependencies,
   env: WorkerEnvironment,
@@ -260,7 +292,12 @@ async function route(
   }
 
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ status: "ok", service: "offshift-demo-api", mcpPath: "/mcp", widgetUri: OFFSHIFT_WIDGET_URI });
+    return json({ status: "ok", service: "offshift-demo-api", mcpPath: "/mcp", widgetUri: OFFSHIFT_WIDGET_URI, codexRelayPath: CODEX_RELAY_PATH });
+  }
+
+  if (url.pathname === CODEX_RELAY_PATH) {
+    if (request.method !== "POST") throw new ApiError(405, "Codex relay events must use POST");
+    return handleCodexRelayEvent(request, env.CODEX_RELAY_SECRET, codexRelayState, dependencies.now);
   }
 
   if (url.pathname === "/mcp") {
@@ -563,6 +600,116 @@ function createOpaqueWidgetCapability(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function handleCodexRelayEvent(
+  request: Request,
+  relaySecret: string | undefined,
+  relayState: CodexRelayState,
+  now: () => number,
+): Promise<Response> {
+  if (!relaySecret) throw new ApiError(503, "Codex relay is not enabled");
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) throw new ApiError(415, "Content-Type must be application/json");
+
+  const rawBody = await request.text();
+  let event: CodexSyncEvent;
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    event = readCodexSyncEvent(parsed, now());
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, "Invalid JSON body");
+  }
+
+  const timestamp = readCodexRelayTimestamp(request.headers.get("x-offshift-timestamp"), now());
+  const signature = request.headers.get("x-offshift-signature");
+  if (!signature || !await hasValidCodexRelaySignature(relaySecret, timestamp, rawBody, signature)) {
+    throw new ApiError(401, "Codex relay signature is invalid");
+  }
+
+  pruneCodexRelayState(relayState, now());
+  const duplicate = relayState.seenEventIds.has(event.eventId);
+  if (!duplicate) {
+    relayState.seenEventIds.set(event.eventId, now() + CODEX_EVENT_TTL_MS);
+    relayState.statusByInstallation.set(event.installationId, {
+      state: event.type === "session.ended" ? "stale" : "active",
+      lastEventAt: event.occurredAt,
+      sessionActive: event.type !== "session.ended",
+      privacyNote: "Only the opted-in Codex session state is synchronized. Prompts, code, repositories, terminal output, and screen content are never sent.",
+    });
+  }
+
+  const status = relayState.statusByInstallation.get(event.installationId);
+  return json({ accepted: true, deduplicated: duplicate, status }, 202);
+}
+
+function readCodexSyncEvent(value: unknown, now: number): CodexSyncEvent {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ApiError(400, "Codex relay event must be an object");
+  const event = value as Record<string, unknown>;
+  const permittedKeys = ["version", "eventId", "installationId", "type", "occurredAt"];
+  if (Object.keys(event).some((key) => !permittedKeys.includes(key))) {
+    throw new ApiError(400, "Codex relay event includes unsupported data");
+  }
+  if (event.version !== CODEX_EVENT_VERSION) throw new ApiError(400, "Codex relay event version is unsupported");
+  if (typeof event.eventId !== "string" || !/^evt_[A-Za-z0-9_-]{8,124}$/.test(event.eventId)) {
+    throw new ApiError(400, "eventId must be an opaque evt_ identifier");
+  }
+  if (typeof event.installationId !== "string" || !/^install_[A-Za-z0-9_-]{8,120}$/.test(event.installationId)) {
+    throw new ApiError(400, "installationId must be an opaque install_ identifier");
+  }
+  if (event.type !== "session.started" && event.type !== "session.heartbeat" && event.type !== "session.ended") {
+    throw new ApiError(400, "Codex relay event type is unsupported");
+  }
+  if (typeof event.occurredAt !== "string" || Number.isNaN(Date.parse(event.occurredAt))) {
+    throw new ApiError(400, "occurredAt must be an ISO timestamp");
+  }
+  if (Math.abs(now - Date.parse(event.occurredAt)) > CODEX_EVENT_TTL_MS) {
+    throw new ApiError(400, "occurredAt must be recent");
+  }
+  return {
+    version: CODEX_EVENT_VERSION,
+    eventId: event.eventId,
+    installationId: event.installationId,
+    type: event.type,
+    occurredAt: event.occurredAt,
+  };
+}
+
+function readCodexRelayTimestamp(value: string | null, now: number): string {
+  if (!value || !/^\d{10,13}$/.test(value)) throw new ApiError(401, "Codex relay timestamp is invalid");
+  const milliseconds = value.length === 10 ? Number(value) * 1_000 : Number(value);
+  if (Math.abs(now - milliseconds) > CODEX_EVENT_TTL_MS) throw new ApiError(401, "Codex relay timestamp is stale");
+  return value;
+}
+
+async function hasValidCodexRelaySignature(secret: string, timestamp: string, rawBody: string, signature: string): Promise<boolean> {
+  if (!/^sha256=[a-f0-9]{64}$/.test(signature)) return false;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${rawBody}`));
+  const expected = `sha256=${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  if (signature.length !== expected.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < signature.length; index += 1) mismatch |= signature.charCodeAt(index) ^ expected.charCodeAt(index);
+  return mismatch === 0;
+}
+
+function pruneCodexRelayState(relayState: CodexRelayState, now: number): void {
+  for (const [eventId, expiresAt] of relayState.seenEventIds) {
+    if (expiresAt <= now) relayState.seenEventIds.delete(eventId);
+  }
+  for (const [installationId, status] of relayState.statusByInstallation) {
+    if (status.lastEventAt && now - Date.parse(status.lastEventAt) > CODEX_SYNC_STALE_AFTER_MS && status.state === "active") {
+      relayState.statusByInstallation.set(installationId, { ...status, state: "stale", sessionActive: false });
+    }
+  }
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown>> {

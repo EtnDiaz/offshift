@@ -75,6 +75,11 @@ final class CompanionStore: ObservableObject {
     var reasons: [String] { assessment.reasons.map(\.rawValue) }
     var lockRuleEnabled: Bool { lockScreenSettings.isEnabled }
     var isProtectState: Bool { assessment.state == .protect }
+    /// The assessment may be a developer fixture, so presentation copy follows
+    /// the evaluated context rather than re-reading the wall clock.
+    private var careIsDuringQuietHours: Bool {
+        assessment.reasons.contains(.insideQuietHours)
+    }
     var canStartCountdown: Bool { isOffshiftEnabled && assessment.state == .protect && lockRuleEnabled && !hasStartedCountdownForProtectEpisode }
     var canRunWindDown: Bool { isOffshiftEnabled && localControl.availability == .active && homeAssistantSettings.isConfigured && !isRunningWindDown }
     var isOffshiftEnabled: Bool { localControl.availability != .disabled }
@@ -103,23 +108,24 @@ final class CompanionStore: ObservableObject {
 
     var careHeadline: String {
         if isProtectState {
-            return nightCareSettings.isInsideQuietHours()
+            return careIsDuringQuietHours
                 ? "It can end here for tonight"
                 : "Step away from the loop"
         }
-        return "Maybe it is time to pause"
+        return careIsDuringQuietHours ? "A kind time to call it tonight" : "Maybe it is time to pause"
     }
 
     var careMessage: String {
         let now = Date.now.formatted(date: .omitted, time: .shortened)
-        if nightCareSettings.isInsideQuietHours() {
-            return "It’s \(now). Your work stays open, and Offshift will not close Codex or your terminal. Your tokens will still be here when you return; caring for yourself does not erase the progress you made tonight."
+        if careIsDuringQuietHours {
+            let timeLead = nightCareSettings.isInsideQuietHours() ? "It’s \(now)." : "This is a quiet-hours check-in."
+            return "\(timeLead) Your work stays open, and Offshift will not close Codex or your terminal. Your tokens will still be here when you return; caring for yourself does not erase the progress you made tonight."
         }
         return "You have reached your local protection threshold. Your work stays open; choose a short reset, a bounded on-call exception, or pause tonight."
     }
 
     var careReason: String {
-        if nightCareSettings.isInsideQuietHours() {
+        if careIsDuringQuietHours {
             let earlyStart = nightCareSettings.hasEarlyStartTomorrow ? " You also marked an early start tomorrow." : ""
             return "Why now: sustained local activity during your \(NightCareSettings.hourLabel(nightCareSettings.startHour))–\(NightCareSettings.hourLabel(nightCareSettings.endHour)) quiet hours.\(earlyStart)"
         }

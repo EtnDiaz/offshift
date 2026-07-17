@@ -17,3 +17,4 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0011](0011-local-night-care-overlay.md) | Bring a local protection window forward after opted-in quiet-hours Protect. | Accepted |
 | [0012](0012-fail-closed-local-lock-consent.md) | Require fresh local consent for the optional Lock Screen rule. | Accepted |
 | [0013](0013-worker-dashboard-capability.md) | Server-verify a short-lived capability before Worker plan mutations. | Accepted |
+| [0014](0014-codex-event-relay-and-local-consent.md) | Treat Codex sync as a consented, coarse outbound event relay. | Accepted |

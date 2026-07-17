@@ -144,7 +144,8 @@ export default function OffshiftWidget() {
     return (
       <main className="offshift-widget offshift-widget--state offshift-widget--error" role="alert">
         <h1>Offshift needs a refresh</h1>
-        <p>It could not load a safe, current plan. No break, lock, or scene was started.</p>
+        <p>This dashboard session is missing or stale, so Offshift did not change your plan. No break, lock, scene, or Codex session was started or stopped.</p>
+        <p className="offshift-widget__availability">Refreshing creates a new short-lived dashboard session. Your local companion settings stay exactly as they are.</p>
         <Button color="secondary" variant="outline" size="md" onClick={() => window.location.reload()}>Refresh Offshift</Button>
       </main>
     );

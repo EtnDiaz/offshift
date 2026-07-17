@@ -8,6 +8,7 @@ struct CompanionDashboardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top) {
+                OffshiftMascotView(size: 68)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Offshift companion")
                         .font(.title2.weight(.semibold))
@@ -19,6 +20,21 @@ struct CompanionDashboardView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(.quaternary, in: Capsule())
+            }
+
+            GroupBox("Next step") {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(store.isProtectState ? "A clearer pause is ready" : "A gentle check-in is ready")
+                            .font(.headline)
+                        Text("Open the full-screen care message when you want to step away. It never closes Codex or touches your work.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Open care screen") { openWindow(id: "protection") }
+                        .buttonStyle(.borderedProminent)
+                }
             }
 
             GroupBox("What Offshift noticed") {
@@ -75,11 +91,6 @@ struct CompanionDashboardView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            HStack {
-                Spacer()
-                Button("Open protection") { openWindow(id: "protection") }
-            }
-
             #if DEBUG
             GroupBox("Developer fixtures") {
                 HStack {
@@ -114,10 +125,7 @@ struct ProtectionWindowView: View {
 
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: store.isProtectState ? "moon.zzz.fill" : "moon.stars.fill")
-                    .font(.system(size: 54, weight: .light))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .accessibilityHidden(true)
+                OffshiftMascotView(size: 150)
                 Text(store.careHeadline)
                     .font(.system(size: 36, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)
@@ -138,13 +146,15 @@ struct ProtectionWindowView: View {
                 }
                 .font(.caption)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(.white.opacity(0.82))
                 .frame(maxWidth: 580)
 
                 VStack(spacing: 12) {
-                    Button("Take 5") { takeFiveAndDismiss() }
+                    Button("Start a 5-minute break and leave") { takeFiveAndDismiss() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityHint("Closes this screen and starts a five-minute local break.")
                     Button(store.pauseActionLabel) { pauseAndDismiss() }
                         .buttonStyle(.bordered)
                     Button("Turn Offshift off", role: .destructive) { turnOffAndDismiss() }
@@ -161,7 +171,7 @@ struct ProtectionWindowView: View {
                     } else {
                         Text("This is a gentle night nudge. It cannot start a Lock Screen countdown.")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.white.opacity(0.78))
                     }
                 }
 

@@ -4,6 +4,36 @@ This package is a local-testable Cloudflare Worker candidate for the Offshift MC
 
 It is deliberately safe by construction: there are no outbound `fetch` calls, credentials, arbitrary webhooks, remote device commands, remote lock actions, or source/screen/content collection. Schedules are only demo records in Worker-isolate memory.
 
+## Optional Codex session relay
+
+The disabled-by-default `POST /v1/codex/events` endpoint is a narrow **inbound**
+relay for an explicitly enabled local Codex integration. It is not a general
+webhook endpoint and it cannot command the companion, a lock screen, a scene,
+or Codex itself.
+
+Enable it only with a Worker secret named `CODEX_RELAY_SECRET`. Each request
+must contain exactly this coarse lifecycle envelope and no additional fields:
+
+```json
+{
+  "version": "2026-07-17",
+  "eventId": "evt_opaque-id",
+  "installationId": "install_opaque-id",
+  "type": "session.started",
+  "occurredAt": "2026-07-17T20:00:00Z"
+}
+```
+
+Allowed types are `session.started`, `session.heartbeat`, and `session.ended`.
+The sender signs the exact raw JSON bytes as `HMAC-SHA256(secret,
+"<timestamp>.<raw-body>")` and sends lowercase hex in
+`x-offshift-signature: sha256=<hex>`, with a fresh Unix timestamp in
+`x-offshift-timestamp`. The Worker rejects missing configuration, stale
+timestamps, bad signatures, unsupported fields, and every payload that could
+contain developer-work content; it safely deduplicates repeated event IDs. This demo relay retains only
+the latest coarse state and five-minute deduplication records in the current
+Worker isolate; it is not durable authentication or production storage.
+
 ## MCP contract
 
 The endpoint follows the project's interactive-decoupled Apps SDK shape:

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
 import test from "node:test";
 import { createDemoStore } from "../.test-dist/demo-store.js";
 import { createWorker } from "../.test-dist/index.js";
@@ -66,7 +67,93 @@ test("health returns a stable service response", async () => {
     service: "offshift-demo-api",
     mcpPath: "/mcp",
     widgetUri: "ui://widget/offshift-worker-v4.html",
+    codexRelayPath: "/v1/codex/events",
   });
+});
+
+async function relaySignature(secret, timestamp, body) {
+  const encoder = new TextEncoder();
+  const key = await webcrypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = await webcrypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${body}`));
+  return `sha256=${Buffer.from(digest).toString("hex")}`;
+}
+
+async function codexRelay(worker, event, options = {}) {
+  const secret = options.secret ?? "offshift-test-secret";
+  const timestamp = options.timestamp ?? String(Date.parse("2026-07-16T10:00:00.000Z"));
+  const body = JSON.stringify(event);
+  const signature = options.signature ?? await relaySignature(secret, timestamp, body);
+  return worker.fetch(request("/v1/codex/events", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-offshift-timestamp": timestamp,
+      "x-offshift-signature": signature,
+    },
+    body,
+  }), { CODEX_RELAY_SECRET: secret }, {});
+}
+
+test("Codex relay only accepts signed, coarse lifecycle events and deduplicates them", async () => {
+  const currentTime = Date.parse("2026-07-16T10:00:00.000Z");
+  const worker = createWorker(createDemoStore(clock), undefined, { now: () => currentTime });
+  const event = {
+    version: "2026-07-17",
+    eventId: "evt_00000001",
+    installationId: "install_00000001",
+    type: "session.started",
+    occurredAt: "2026-07-16T10:00:00.000Z",
+  };
+  const first = await codexRelay(worker, event);
+  assert.equal(first.status, 202);
+  assert.deepEqual(await responseJson(first), {
+    accepted: true,
+    deduplicated: false,
+    status: {
+      state: "active",
+      lastEventAt: event.occurredAt,
+      sessionActive: true,
+      privacyNote: "Only the opted-in Codex session state is synchronized. Prompts, code, repositories, terminal output, and screen content are never sent.",
+    },
+  });
+
+  const duplicate = await codexRelay(worker, event);
+  assert.equal(duplicate.status, 202);
+  assert.equal((await responseJson(duplicate)).deduplicated, true);
+
+  const contentAttempt = await codexRelay(worker, { ...event, eventId: "evt_00000002", prompt: "ship this feature" });
+  assert.equal(contentAttempt.status, 400);
+  assert.match((await responseJson(contentAttempt)).error, /unsupported data/);
+});
+
+test("Codex relay fails closed when disabled, stale, or unsigned", async () => {
+  const currentTime = Date.parse("2026-07-16T10:00:00.000Z");
+  const worker = createWorker(createDemoStore(clock), undefined, { now: () => currentTime });
+  const event = {
+    version: "2026-07-17",
+    eventId: "evt_00000003",
+    installationId: "install_00000001",
+    type: "session.heartbeat",
+    occurredAt: "2026-07-16T10:00:00.000Z",
+  };
+  const disabled = await worker.fetch(request("/v1/codex/events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(event),
+  }), {}, {});
+  assert.equal(disabled.status, 503);
+
+  const stale = await codexRelay(worker, event, { timestamp: String(currentTime - 300_001) });
+  assert.equal(stale.status, 401);
+  assert.match((await responseJson(stale)).error, /timestamp is stale/);
+
+  const invalid = await codexRelay(worker, event, { signature: "sha256=" + "0".repeat(64) });
+  assert.equal(invalid.status, 401);
+  assert.match((await responseJson(invalid)).error, /signature is invalid/);
+
+  const futureEvent = await codexRelay(worker, { ...event, eventId: "evt_00000004", occurredAt: "2026-07-16T10:05:01.000Z" });
+  assert.equal(futureEvent.status, 400);
+  assert.match((await responseJson(futureEvent)).error, /occurredAt must be recent/);
 });
 
 test("focus snapshot is deterministic for a user", async () => {
