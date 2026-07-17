@@ -39,6 +39,11 @@ cd "$ROOT_DIR"
 swift build
 bash ./script/generate_app_icon.sh
 BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+BUILD_RESOURCE_BUNDLE="$(swift build --show-bin-path)/OffshiftCompanion_OffshiftCompanion.bundle"
+if [ ! -d "$BUILD_RESOURCE_BUNDLE" ]; then
+  echo "Missing SwiftPM resource bundle: $BUILD_RESOURCE_BUNDLE" >&2
+  exit 1
+fi
 
 # Migrate old generated bundles once. They are disposable build artifacts,
 # never application state, and are the source of stale Spotlight/Launchpad
@@ -62,6 +67,10 @@ rm -rf "$DIST_DIR/$APP_NAME.app" "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
+# SwiftPM places target resources in a generated bundle. A distributable AppKit
+# bundle instead loads these assets from Contents/Resources, which is sealed by
+# codesign and is visible through Bundle.main at runtime.
+cp -R "$BUILD_RESOURCE_BUNDLE/Resources/." "$APP_RESOURCES/"
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -25,7 +25,7 @@ struct OffshiftBrandMarkView: View {
 @MainActor
 enum OffshiftBrandMark {
     static let image: NSImage? = {
-        guard let url = Bundle.module.url(
+        guard let url = Bundle.main.url(
             forResource: "sleeping-codex-logo",
             withExtension: "png",
             subdirectory: "ThirdParty/RedCard/brand"

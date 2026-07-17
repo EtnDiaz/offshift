@@ -34,7 +34,7 @@ struct RedCardCodexSleepMascotView: View {
 private enum RedCardSleepingFrames {
     static func image(frame: Int) -> NSImage? {
         let name = String(format: "sleeping-%02d", frame)
-        guard let url = Bundle.module.url(
+        guard let url = Bundle.main.url(
             forResource: name,
             withExtension: "png",
             subdirectory: "ThirdParty/RedCard/sprites/sleeping"

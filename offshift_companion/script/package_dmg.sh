@@ -13,6 +13,7 @@ DMG_PATH="$RELEASE_DIR/Offshift-$VERSION.dmg"
 rm -rf "$STAGING_DIR" "$DMG_PATH"
 mkdir -p "$RELEASE_DIR"
 OFFSHIFT_BUILD_DIR="$STAGING_DIR" "$ROOT_DIR/script/build_and_run.sh" --bundle
+test -f "$APP_BUNDLE/Contents/Resources/ThirdParty/RedCard/brand/sleeping-codex-logo.png"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 # The companion is intentionally menu-bar-first, so a bare app bundle in a
