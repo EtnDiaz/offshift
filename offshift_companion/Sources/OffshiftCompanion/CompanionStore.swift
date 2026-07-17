@@ -186,6 +186,10 @@ final class CompanionStore: ObservableObject {
         return "Why now: sustained local aggregate activity reached your protection threshold."
     }
 
+    var careScreenRequiresMonitorCover: Bool {
+        careScreenTriggerSource.requiresMonitorCoverWindow
+    }
+
     func simulateRoutine() {
         careScreenTriggerSource = .localBehaviour
         apply(state: .routine, reasons: [.belowDriftThreshold])

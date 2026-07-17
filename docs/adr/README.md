@@ -22,3 +22,4 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0016](0016-visible-protection-before-local-lock-countdown.md) | Make the local protection surface visible before the Lock Screen countdown. | Accepted |
 | [0017](0017-tray-first-local-care-preview-boundary.md) | Make Offshift tray-first and keep care-screen triggers local. | Accepted |
 | [0018](0018-consent-first-onboarding-and-focus-status.md) | Require first-run consent and request permissions just in time. | Accepted |
+| [0019](0019-testable-developer-care-preview.md) | Keep the Debug care preview locally testable without weakening the real care surface. | Accepted |

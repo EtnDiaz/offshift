@@ -67,6 +67,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--care-preview") {
+            NSApp.setActivationPolicy(.regular)
             DispatchQueue.main.async { [weak self] in
                 self?.store.showDeveloperCarePreview()
             }
@@ -127,6 +128,11 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     private func dismissProtection() {
         store.protectionSurfaceDidDisappear()
         protectionWindow?.orderOut(nil)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--care-preview") {
+            NSApp.setActivationPolicy(.accessory)
+        }
+        #endif
     }
 
     private func showOnboarding() {

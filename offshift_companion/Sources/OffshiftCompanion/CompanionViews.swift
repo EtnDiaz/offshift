@@ -78,9 +78,12 @@ struct ProtectionWindowView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 48)
         }
-        .background(InterventionWindowConfigurator(onProtectionWindowReady: {
-            store.protectionSurfaceDidBecomeVisible()
-        }))
+        .background(InterventionWindowConfigurator(
+            requiresMonitorCover: store.careScreenRequiresMonitorCover,
+            onProtectionWindowReady: {
+                store.protectionSurfaceDidBecomeVisible()
+            }
+        ))
         .onAppear { isCareMessageFocused = true }
         .onDisappear { store.protectionSurfaceDidDisappear() }
     }

@@ -188,6 +188,11 @@ final class CareScreenTriggerSourceTests: XCTestCase {
         XCTAssertTrue(CareScreenTriggerSource.localBehaviour.permitsAutomaticLockCountdown)
         XCTAssertFalse(CareScreenTriggerSource.developerPreview.permitsAutomaticLockCountdown)
     }
+
+    func testOnlyLocalBehaviourRequiresTheMonitorCoverWindow() {
+        XCTAssertTrue(CareScreenTriggerSource.localBehaviour.requiresMonitorCoverWindow)
+        XCTAssertFalse(CareScreenTriggerSource.developerPreview.requiresMonitorCoverWindow)
+    }
 }
 
 final class EmergencyEscapeExitGateTests: XCTestCase {

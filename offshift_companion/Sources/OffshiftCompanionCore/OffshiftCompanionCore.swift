@@ -247,6 +247,13 @@ public enum CareScreenTriggerSource: Equatable, Sendable {
     public var permitsAutomaticLockCountdown: Bool {
         self == .localBehaviour
     }
+
+    /// The real care surface must cover the monitor above ordinary windows.
+    /// The Debug-only preview deliberately uses a lower level so local QA can
+    /// inspect the identical content and verify the emergency exit.
+    public var requiresMonitorCoverWindow: Bool {
+        self == .localBehaviour
+    }
 }
 
 /// A local emergency exit recognizer. The AppKit host supplies Escape key
