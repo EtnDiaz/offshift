@@ -2,7 +2,7 @@
 
 - GitLab milestone: [Offshift MVP — Protective Loop](https://gitlab.com/tixo-digital/program/-/milestones/1)
 - Coordination issue: [program#150](https://gitlab.com/tixo-digital/program/-/work_items/150)
-- Status: active
+- Status: active — implementation audit complete; awaiting ChatGPT connector provisioning, the final human care-surface pass, and opt-in pilot evidence.
 
 ## Definition of done
 

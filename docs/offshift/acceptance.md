@@ -35,3 +35,21 @@ Run each prompt with Offshift enabled. Record the selected tool, arguments, rend
 ## Feature decision gate
 
 Promote the local overlay only after five opt-in pilot participants can identify the reason for each shown event, at least three judge it timely, and the rate of “unhelpful” interruptions is below one per two active hours. Promote the optional Lock Screen only after every participant can explain the exact local rule and reports no surprise lock.
+
+## Closure audit — 2026-07-17
+
+The implementation-facing verification was repeated from the current
+`b93f01d` worktree:
+
+| Check | Result |
+| --- | --- |
+| Worker | `npm run typecheck` and `npm test` pass (17 tests). The public Worker returns `/health`, negotiates `initialize` at `2025-03-26`, exposes eight tools with no lock tool, and serves `ui://widget/offshift-worker-v4.html` as `text/html;profile=mcp-app`. |
+| Node MCP domain | `pnpm test` and `pnpm typecheck` pass (6 tests). |
+| macOS companion | `swift test` passes (33 tests); `./script/build_and_run.sh --verify` builds, signs, and launches the tray-first bundle. |
+| Care preview | `./script/build_and_run.sh --care-preview` launches the local visual-only process with `--care-preview`. It cannot enter a Lock Screen countdown or execute Home Assistant; that boundary is covered by the focused test. |
+
+The remaining evidence is intentionally not inferred from these checks:
+
+1. ChatGPT's Developer Mode host has not provisioned the public connector, so the golden prompts and host-rendered widget remain unverified. The form previously returned “Error creating connector — Something went wrong”; a current deep link opens Plugins but does not restore that form.
+2. Computer Use cannot obtain accessibility state for the screen-saver-level care window, and therefore cannot perform the final visual/real-keyboard pass. The four-Escape gate is unit-tested, but a human desktop pass is still required for that monitor-level surface.
+3. No five-person opt-in pilot evidence exists yet. The pilot protocol and non-identifying recording template are in [pilot-readiness.md](pilot-readiness.md); they are preparation, not pilot results.
