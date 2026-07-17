@@ -16,8 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -35,7 +33,7 @@ jobs:
 
   macos:
     name: macOS companion and DMG
-    runs-on: macos-14
+    runs-on: macos-15
     defaults:
       run:
         working-directory: offshift_companion
