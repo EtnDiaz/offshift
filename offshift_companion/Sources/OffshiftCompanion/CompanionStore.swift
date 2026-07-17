@@ -32,6 +32,7 @@ final class CompanionStore: ObservableObject {
     private var overrideExpiryTimer: Timer?
     private var protectionSurfaceGate = ProtectionSurfaceVisibilityGate()
     private var hasStartedCountdownForProtectEpisode = false
+    private var careScreenTriggerSource: CareScreenTriggerSource = .localBehaviour
     private var hasPresentedNightCareDriftPrompt = false
     private let nightCarePresentationPolicy = NightCarePresentationPolicy()
     let homeAssistantSettings = HomeAssistantSettings()
@@ -171,18 +172,28 @@ final class CompanionStore: ObservableObject {
     }
 
     func simulateRoutine() {
+        careScreenTriggerSource = .localBehaviour
         apply(state: .routine, reasons: [.belowDriftThreshold])
     }
 
     func simulateDrift() {
+        careScreenTriggerSource = .localBehaviour
         apply(state: .drift, reasons: [.sustainedContinuousActivity])
     }
 
     func simulateProtect() {
+        showDeveloperCarePreview()
+    }
+
+    /// A Debug-only local visual test route. It deliberately cannot start the
+    /// optional Lock Screen countdown or a smart-home action.
+    func showDeveloperCarePreview() {
+        careScreenTriggerSource = .developerPreview
         apply(state: .protect, reasons: [.protectContinuousActivity])
     }
 
     func simulateLateSessionRisk() {
+        careScreenTriggerSource = .localBehaviour
         let now = Date.now
         let assessment = riskPolicy.assess(
             [
@@ -203,6 +214,7 @@ final class CompanionStore: ObservableObject {
     }
 
     func simulateGentleNightCareNudge() {
+        careScreenTriggerSource = .localBehaviour
         let now = Date.now
         let assessment = riskPolicy.assess(
             [
@@ -378,6 +390,7 @@ final class CompanionStore: ObservableObject {
             samplingStatus = localControlSummary
             return
         }
+        careScreenTriggerSource = .localBehaviour
         persistLocalControl()
         apply(riskPolicy.assess(
             intervals,
@@ -528,6 +541,10 @@ final class CompanionStore: ObservableObject {
     }
 
     private func maybeStartAutomaticCountdown() {
+        if !careScreenTriggerSource.permitsAutomaticLockCountdown {
+            countdownText = "Developer preview only. The local Lock Screen rule will not start."
+            return
+        }
         guard assessment.state == .protect,
               protectionSurfaceGate.isVisible,
               lockRuleEnabled,

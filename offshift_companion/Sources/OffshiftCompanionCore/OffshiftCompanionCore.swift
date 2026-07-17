@@ -237,6 +237,18 @@ public struct ProtectionSurfaceVisibilityGate: Equatable, Sendable {
     }
 }
 
+/// Identifies the local source that presented a care screen. Only evaluated
+/// behaviour is eligible for an optional local Lock Screen countdown; the
+/// developer preview is visual-only.
+public enum CareScreenTriggerSource: Equatable, Sendable {
+    case localBehaviour
+    case developerPreview
+
+    public var permitsAutomaticLockCountdown: Bool {
+        self == .localBehaviour
+    }
+}
+
 public enum AssessmentReason: String, Codable, CaseIterable, Sendable {
     case noRecentActivity
     case belowDriftThreshold

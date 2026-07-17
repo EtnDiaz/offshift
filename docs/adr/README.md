@@ -20,3 +20,4 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0014](0014-codex-event-relay-and-local-consent.md) | Treat Codex sync as a consented, coarse outbound event relay. | Accepted |
 | [0015](0015-redcard-codex-mascot-provenance.md) | Use the Red Card Codex mascot with upstream provenance. | Accepted |
 | [0016](0016-visible-protection-before-local-lock-countdown.md) | Make the local protection surface visible before the Lock Screen countdown. | Accepted |
+| [0017](0017-tray-first-local-care-preview-boundary.md) | Make Offshift tray-first and keep care-screen triggers local. | Accepted |

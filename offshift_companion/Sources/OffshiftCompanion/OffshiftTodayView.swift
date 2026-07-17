@@ -68,16 +68,9 @@ struct CompanionDashboardView: View {
                 .padding(28)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-                HStack {
-                    Label(store.localControlSummary, systemImage: store.isOffshiftEnabled ? "checkmark.circle" : "pause.circle")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if store.isProtectState {
-                        Button("Open care screen") { openWindow(id: "protection") }
-                            .buttonStyle(.bordered)
-                    }
-                }
-                .font(.callout)
+                Label(store.localControlSummary, systemImage: store.isOffshiftEnabled ? "checkmark.circle" : "pause.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: 760, alignment: .leading)
             .padding(36)

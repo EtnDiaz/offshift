@@ -183,6 +183,13 @@ final class ProtectionSurfaceVisibilityGateTests: XCTestCase {
     }
 }
 
+final class CareScreenTriggerSourceTests: XCTestCase {
+    func testDeveloperPreviewCannotStartAnAutomaticLockCountdown() {
+        XCTAssertTrue(CareScreenTriggerSource.localBehaviour.permitsAutomaticLockCountdown)
+        XCTAssertFalse(CareScreenTriggerSource.developerPreview.permitsAutomaticLockCountdown)
+    }
+}
+
 final class QuietHoursScheduleTests: XCTestCase {
     func testOvernightQuietHoursIncludeMidnightAndExcludeTheEndHour() {
         let schedule = QuietHoursSchedule(startHour: 23, endHour: 7)

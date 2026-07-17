@@ -7,7 +7,7 @@ struct OffshiftCompanionApp: App {
     @StateObject private var store = CompanionStore()
 
     var body: some Scene {
-        WindowGroup("Offshift", id: "dashboard") {
+        Window("Offshift Today", id: "dashboard") {
             CompanionDashboardView(store: store)
                 .frame(minWidth: 680, minHeight: 560)
         }
@@ -24,7 +24,7 @@ struct OffshiftCompanionApp: App {
             #endif
         }
 
-        WindowGroup("Offshift protection", id: "protection") {
+        Window("Offshift protection", id: "protection") {
             ProtectionWindowView(store: store)
                 .frame(minWidth: 720, minHeight: 520)
         }
@@ -42,7 +42,6 @@ struct OffshiftCompanionApp: App {
 
 final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.accessory)
     }
 }
