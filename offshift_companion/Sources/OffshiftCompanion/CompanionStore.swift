@@ -18,6 +18,7 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var isRunningWindDown = false
     @Published private(set) var localControl = LocalInterventionGate()
     @Published private(set) var protectionPresentationToken = 0
+    @Published private(set) var careMode: OffshiftCareMode
 
     private let shadowLog = InMemoryShadowModeLog()
     private let disabledLockAdapter = NeverLockingTestAdapter()
@@ -38,11 +39,14 @@ final class CompanionStore: ObservableObject {
     /// A short, always-visible local interval: the intervention wall appears first,
     /// then a separately enabled local rule may request the real system Lock Screen.
     private let lockCountdownDuration: TimeInterval = 10
+    private static let careModeDefaultsKey = "offshift.careMode"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         controller = InterventionController(lockAdapter: disabledLockAdapter, shadowLog: shadowLog)
-        localControl = Self.loadLocalControl(from: defaults)
+        let loadedLocalControl = Self.loadLocalControl(from: defaults)
+        localControl = loadedLocalControl
+        careMode = Self.loadCareMode(from: defaults, localControl: loadedLocalControl)
         homeAssistantSettings.onSettingsChanged = { [weak self] in
             self?.objectWillChange.send()
         }
@@ -55,7 +59,11 @@ final class CompanionStore: ObservableObject {
         sampler.onIntervalsChanged = { [weak self] intervals in
             self?.applyLiveIntervals(intervals)
         }
-        if localControl.availability != .disabled {
+        if careMode == .off {
+            localControl.disable()
+            persistLocalControl()
+            samplingStatus = "Offshift is off. Local sampling and interventions stopped."
+        } else if localControl.availability != .disabled {
             sampler.start()
         } else {
             samplingStatus = "Offshift is turned off on this Mac."
@@ -63,6 +71,7 @@ final class CompanionStore: ObservableObject {
     }
 
     var stateLabel: String { assessment.state.rawValue.capitalized }
+    var careModeLabel: String { careMode == .sleep ? "Sleep care" : "Off" }
     var reasons: [String] { assessment.reasons.map(\.rawValue) }
     var lockRuleEnabled: Bool { lockScreenSettings.isEnabled }
     var isProtectState: Bool { assessment.state == .protect }
@@ -199,10 +208,11 @@ final class CompanionStore: ObservableObject {
         }
     }
 
-    func grantOnCallOverride() {
+    @discardableResult
+    func grantOnCallOverride() -> Bool {
         guard localControl.permitsIntervention(at: .now) else {
             onCallMessage = localControlSummary
-            return
+            return false
         }
         switch controller.grantOnCallOverride(requestedDuration: 15 * 60, at: .now) {
         case let .granted(override):
@@ -210,8 +220,10 @@ final class CompanionStore: ObservableObject {
             stopCountdownTimer()
             scheduleOverrideExpiry(at: override.expiresAt)
             onCallMessage = "On-call override ends at \(override.expiresAt.formatted(date: .omitted, time: .shortened))."
+            return true
         case let .rejected(reason):
             onCallMessage = reason
+            return false
         }
     }
 
@@ -228,15 +240,38 @@ final class CompanionStore: ObservableObject {
         suppressLocalInterventions(message: "Offshift is paused until tomorrow. No local countdown, Lock Screen request, or scene can start while paused.")
     }
 
+    func setCareMode(_ mode: OffshiftCareMode) {
+        careMode = mode
+        defaults.set(mode.rawValue, forKey: Self.careModeDefaultsKey)
+        switch mode {
+        case .sleep:
+            nightCareSettings.setEnabled(true)
+            localControl.enable()
+            persistLocalControl()
+            sampler.start()
+            samplingStatus = "Sleep care is active. Local aggregate sampling resumed. No content leaves this Mac."
+            objectWillChange.send()
+        case .off:
+            nightCareSettings.setEnabled(false)
+            stopOffshiftForCareMode()
+        }
+    }
+
+    /// Reserved for a separately entitled native adapter. The local user-facing
+    /// selector shares this exact reducer, so an `off` transition always wins.
+    func applyScreenTimeMode(_ mode: OffshiftCareMode) {
+        setCareMode(mode)
+    }
+
     func resumeOffshift() {
-        localControl.enable()
-        persistLocalControl()
-        sampler.start()
-        samplingStatus = "Local aggregate sampling resumed. No content leaves this Mac."
-        objectWillChange.send()
+        setCareMode(.sleep)
     }
 
     func disableOffshift() {
+        setCareMode(.off)
+    }
+
+    private func stopOffshiftForCareMode() {
         localControl.disable()
         persistLocalControl()
         sampler.stop()
@@ -390,6 +425,15 @@ final class CompanionStore: ObservableObject {
             return LocalInterventionGate(availability: .paused(until: pauseUntil))
         }
         return LocalInterventionGate()
+    }
+
+    private static func loadCareMode(from defaults: UserDefaults, localControl: LocalInterventionGate) -> OffshiftCareMode {
+        if let rawValue = defaults.string(forKey: careModeDefaultsKey),
+           let mode = OffshiftCareMode(rawValue: rawValue) {
+            return mode
+        }
+        if case .disabled = localControl.availability { return .off }
+        return .sleep
     }
 
     private func persistLocalControl() {

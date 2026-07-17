@@ -1,3 +1,4 @@
+import OffshiftCompanionCore
 import SwiftUI
 
 struct CompanionDashboardView: View {
@@ -38,6 +39,14 @@ struct CompanionDashboardView: View {
             GroupBox("Your control") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(store.localControlSummary)
+                    Picker("Offshift mode", selection: Binding(
+                        get: { store.careMode },
+                        set: { store.setCareMode($0) }
+                    )) {
+                        Text("Sleep care").tag(OffshiftCareMode.sleep)
+                        Text("Off").tag(OffshiftCareMode.off)
+                    }
+                    .pickerStyle(.segmented)
                     Text(store.nightCareSettings.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -96,6 +105,7 @@ struct CompanionDashboardView: View {
 
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
+    @Environment(\.dismissWindow) private var dismissWindow
     @AccessibilityFocusState private var isCareMessageFocused: Bool
 
     var body: some View {
@@ -132,14 +142,16 @@ struct ProtectionWindowView: View {
                 .frame(maxWidth: 580)
 
                 VStack(spacing: 12) {
-                    Button("Take 5") { store.takeFive() }
+                    Button("Take 5") { takeFiveAndDismiss() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
-                    Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
+                    Button(store.pauseActionLabel) { pauseAndDismiss() }
+                        .buttonStyle(.bordered)
+                    Button("Turn Offshift off", role: .destructive) { turnOffAndDismiss() }
                         .buttonStyle(.bordered)
                     if store.isProtectState {
                         HStack {
-                            Button("On call for 15 min") { store.grantOnCallOverride() }
+                            Button("On call for 15 min") { grantOnCallAndDismiss() }
                             Button("Cancel countdown") { store.cancelPreLockCountdown() }
                             if store.canStartCountdown {
                                 Button("Start 10-second countdown") { store.startPreLockCountdown() }
@@ -166,6 +178,26 @@ struct ProtectionWindowView: View {
         .background(InterventionWindowConfigurator())
         .onAppear { isCareMessageFocused = true }
     }
+
+    private func takeFiveAndDismiss() {
+        store.takeFive()
+        dismissWindow(id: "protection")
+    }
+
+    private func pauseAndDismiss() {
+        store.pauseUntilTomorrow()
+        dismissWindow(id: "protection")
+    }
+
+    private func grantOnCallAndDismiss() {
+        guard store.grantOnCallOverride() else { return }
+        dismissWindow(id: "protection")
+    }
+
+    private func turnOffAndDismiss() {
+        store.disableOffshift()
+        dismissWindow(id: "protection")
+    }
 }
 
 struct MenuBarContent: View {
@@ -189,6 +221,13 @@ struct CompanionSettingsView: View {
         Form {
             Section("Offshift control") {
                 Text(store.localControlSummary)
+                Picker("Offshift mode", selection: Binding(
+                    get: { store.careMode },
+                    set: { store.setCareMode($0) }
+                )) {
+                    Text("Sleep care").tag(OffshiftCareMode.sleep)
+                    Text("Off").tag(OffshiftCareMode.off)
+                }
                 Text("A pause immediately cancels the local countdown and prevents scenes or Lock Screen actions until tomorrow. Turning Offshift off also stops local sampling.")
                     .foregroundStyle(.secondary)
                 if store.isPaused {

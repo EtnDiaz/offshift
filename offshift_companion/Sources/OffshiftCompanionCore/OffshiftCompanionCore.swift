@@ -1,5 +1,13 @@
 import Foundation
 
+/// The only two user-owned modes the local companion needs. A future native
+/// Screen Time bridge may request this transition, but it must not introduce
+/// content or usage collection into the decision.
+public enum OffshiftCareMode: String, CaseIterable, Sendable {
+    case sleep
+    case off
+}
+
 /// The only smart-home capability in the MVP. This identifier never comes from a
 /// ChatGPT tool, a Worker response, or freeform model text.
 public enum WindDownScene {
