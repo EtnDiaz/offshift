@@ -2,7 +2,7 @@
 
 - GitLab milestone: [Offshift MVP — Protective Loop](https://gitlab.com/tixo-digital/program/-/milestones/1)
 - Coordination issue: [program#150](https://gitlab.com/tixo-digital/program/-/work_items/150)
-- Status: active — implementation audit complete; awaiting ChatGPT connector provisioning, the final human care-surface pass, and opt-in pilot evidence.
+- Status: active — the safe local-first MVP remains open for a final human care-surface pass and opt-in pilot evidence. A public multi-user release is a separate authenticated-service milestone under ADR 0021.
 
 ## Definition of done
 
@@ -19,3 +19,6 @@
 - Apple Screen Time / Family Controls entitlement.
 - Automatic reading of Codex prompts, repositories, code, or terminal data.
 - Public directory submission or production smart-home credentials.
+- OAuth, durable tenant isolation, or a public multi-user cloud service. Those
+  are prerequisites for a later public release, not a property of the current
+  demo endpoint.

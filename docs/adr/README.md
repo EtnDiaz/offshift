@@ -24,3 +24,6 @@ These ADRs record decisions that affect user agency, privacy, or cross-process b
 | [0018](0018-consent-first-onboarding-and-focus-status.md) | Require first-run consent and request permissions just in time. | Accepted |
 | [0019](0019-testable-developer-care-preview.md) | Keep the Debug care preview locally testable without weakening the real care surface. | Accepted |
 | [0020](0020-mvp-timing-only-cloud-contract.md) | Keep the MVP cloud contract to aggregate timing only. | Accepted |
+| [0021](0021-public-user-identity-and-tenant-isolation.md) | Keep the anonymous demo separate from an OAuth-isolated multi-user service. | Accepted |
+| [0022](0022-private-secure-mcp-tunnel-pilot.md) | Use a Secure MCP Tunnel only for the fixture-only single-user ChatGPT pilot. | Accepted |
+| [0023](0023-public-redcard-mascot-redistribution.md) | Redistribute Red Card-derived art publicly under Apache-2.0 with notices and no trademark endorsement. | Accepted |

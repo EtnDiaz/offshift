@@ -18,6 +18,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     let store = CompanionStore()
     private var emergencyExitGate = EmergencyEscapeExitGate()
     private var localKeyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var onboardingWindow: NSWindow?
     private var dashboardWindow: NSWindow?
     private var settingsWindow: NSWindow?
@@ -32,12 +33,6 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         installStatusItem()
         store.onProtectionRequested = { [weak self] in
             self?.showProtection()
-        }
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == 53 else { return event }
-            guard self?.emergencyExitGate.recordEscape(at: Date.now) == true else { return nil }
-            NSApp.terminate(nil)
-            return nil
         }
         if store.needsOnboarding {
             showOnboarding()
@@ -57,9 +52,7 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if let localKeyMonitor {
-            NSEvent.removeMonitor(localKeyMonitor)
-        }
+        removeEmergencyExitMonitor()
     }
 
     private func installStatusItem() {
@@ -145,10 +138,12 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showProtection() {
+        guard store.shouldKeepProtectionSurfacePresented else { return }
         let window = protectionWindow ?? makeProtectionWindow()
         protectionWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installEmergencyExitMonitor()
     }
 
     private func makeProtectionWindow() -> NSWindow {
@@ -167,8 +162,66 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func dismissProtection() {
+        removeEmergencyExitMonitor()
         store.protectionSurfaceDidDisappear()
         protectionWindow?.orderOut(nil)
+    }
+
+    /// The emergency exit is intentionally local to the care surface. Installing
+    /// the monitor only for that surface preserves standard Escape behavior for
+    /// menus and normal windows during ordinary use.
+    private func installEmergencyExitMonitor() {
+        guard localKeyMonitor == nil, globalKeyMonitor == nil else { return }
+
+        emergencyExitGate = EmergencyEscapeExitGate()
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self,
+                  EmergencyEscapeMonitorPolicy.shouldHandle(
+                      keyCode: event.keyCode,
+                      isProtectionVisible: self.protectionWindow?.isVisible == true
+                  )
+            else {
+                return event
+            }
+
+            self.recordEmergencyEscape()
+            return nil
+        }
+
+        // A screen-saver-level borderless window can be visible without being
+        // the AppKit key window. In that case Escape is delivered to the app
+        // that previously had focus, so a local monitor alone would make the
+        // documented emergency exit unreachable. The global companion monitor
+        // observes that complementary path while a care surface is visible.
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return }
+            DispatchQueue.main.async {
+                guard let self,
+                      EmergencyEscapeMonitorPolicy.shouldHandle(
+                          keyCode: event.keyCode,
+                          isProtectionVisible: self.protectionWindow?.isVisible == true
+                      )
+                else { return }
+                self.recordEmergencyEscape()
+            }
+        }
+    }
+
+    private func recordEmergencyEscape() {
+        guard emergencyExitGate.recordEscape(at: Date.now) else { return }
+        NSApp.terminate(nil)
+    }
+
+    private func removeEmergencyExitMonitor() {
+        if let localKeyMonitor {
+            NSEvent.removeMonitor(localKeyMonitor)
+            self.localKeyMonitor = nil
+        }
+        if let globalKeyMonitor {
+            NSEvent.removeMonitor(globalKeyMonitor)
+            self.globalKeyMonitor = nil
+        }
+        emergencyExitGate = EmergencyEscapeExitGate()
     }
 
     private func showOnboarding() {
@@ -188,6 +241,18 @@ final class OffshiftAppDelegate: NSObject, NSApplicationDelegate {
         onboardingWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Restricts the four-Escape exit to a visible local care surface. A monitor
+/// must not require `isKeyWindow`: monitor-covering AppKit windows can be
+/// intentionally visible while the prior application remains key.
+enum EmergencyEscapeMonitorPolicy {
+    static func shouldHandle(
+        keyCode: UInt16,
+        isProtectionVisible: Bool
+    ) -> Bool {
+        keyCode == 53 && isProtectionVisible
     }
 }
 

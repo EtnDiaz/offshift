@@ -54,6 +54,14 @@ test("workPatternSnapshot is explainable and never enables a lock rule", () => {
   assert.equal(snapshot.lockScreenRule, "not-configured");
 });
 
+test("focus snapshot contains aggregate timing only", () => {
+  const snapshot = focusSnapshot();
+
+  assert.equal(Object.hasOwn(snapshot, "activeAppCategory"), false);
+  assert.equal(Object.hasOwn(snapshot, "appName"), false);
+  assert.equal(Object.hasOwn(snapshot, "screenContent"), false);
+});
+
 test("on-call override is bounded and idempotent", () => {
   const state = createDemoState();
   const now = new Date("2026-07-16T12:00:00.000Z");

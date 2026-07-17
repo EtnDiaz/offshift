@@ -21,8 +21,13 @@ It must be clearly branded as **Offshift's companion**, not presented as an offi
 - The mascot always explains the coarse signals behind a nudge in plain language.
 - It never shames, diagnoses, scolds, or pretends to have monitored code or thoughts.
 - It is decorative around the standard Apps SDK UI controls; actions remain accessible text buttons.
-- For the first implementation, use a simple original illustration or motion system rather than a copied Red Card asset. Avoid a camera/gesture dependency until users demonstrate they want it.
+- The first implementation uses a Red Card-derived sleeping companion under
+  Apache-2.0 with its license, notice, and source attribution preserved. It is
+  decorative, not an official OpenAI/Codex character or an endorsement; avoid
+  a camera/gesture dependency until users demonstrate they want it.
 
 ## First design deliverable
 
-Create one compact, original mascot illustration with the five state variants above. Keep it as a local widget asset and verify that the widget remains understandable with the image hidden or unavailable.
+Create compact state variants from the documented, properly attributed asset
+set. Keep them as local widget assets and verify that the widget remains
+understandable with the image hidden or unavailable.
