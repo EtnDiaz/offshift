@@ -60,8 +60,14 @@ rm -f "$ASSET_INFO_PLIST"
 xattr -cr "$APP_BUNDLE"
 codesign --force --sign - "$APP_BUNDLE"
 
-open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
-open_care_preview() { /usr/bin/open -n "$APP_BUNDLE" --args --care-preview; }
+# Opening a freshly rebuilt development bundle repeatedly makes LaunchServices
+# retain stale Launchpad registrations. Launch the executable *inside* the
+# signed bundle instead: NSBundle still resolves the bundled icon and metadata,
+# while the tray-first companion does not add a Launchpad item for every QA
+# launch. The process is replaced above, so this remains single-instance.
+launch_app() { "$APP_BINARY" "$@" >/dev/null 2>&1 & }
+open_app() { launch_app; }
+open_care_preview() { launch_app --care-preview; }
 case "$MODE" in
   run) open_app ;;
   --care-preview|care-preview) open_care_preview ;;

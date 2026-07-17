@@ -8,7 +8,6 @@ export const OFFSHIFT_TOOLS = {
 export const OFFSHIFT_WIDGET_CAPABILITY_META_KEY = "offshift/widgetCapability";
 
 export interface FocusSnapshot {
-  activeAppCategory: "coding";
   focusMinutes: number;
   thresholdMinutes: number;
   suggestedBreakMinutes: number;
@@ -61,7 +60,7 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
   const behaviour = value.behaviour;
   const plan = value.plan;
   if (
-    snapshot.activeAppCategory !== "coding" ||
+    "activeAppCategory" in snapshot ||
     !isPositiveInt(snapshot.focusMinutes) ||
     !isPositiveInt(snapshot.thresholdMinutes) ||
     !isPositiveInt(snapshot.suggestedBreakMinutes) ||
@@ -85,7 +84,6 @@ export function toOffshiftWidgetData(value: unknown): OffshiftWidgetData | null 
 
   return {
     snapshot: {
-      activeAppCategory: "coding",
       focusMinutes: snapshot.focusMinutes,
       thresholdMinutes: snapshot.thresholdMinutes,
       suggestedBreakMinutes: snapshot.suggestedBreakMinutes,

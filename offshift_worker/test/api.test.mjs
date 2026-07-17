@@ -393,7 +393,8 @@ test("MCP dashboard output fits the React widget and on-call remains bounded", a
   const worker = app();
   const dashboard = await renderDashboard(worker, 16);
   const capability = widgetCapability(dashboard);
-  assert.equal(dashboard.structuredContent.snapshot.activeAppCategory, "coding");
+  assert.equal("activeAppCategory" in dashboard.structuredContent.snapshot, false);
+  assert.doesNotMatch(JSON.stringify(dashboard.structuredContent), /activeAppCategory|"coding"/i);
   assert.equal(dashboard.structuredContent.plan.sceneId, "wind-down");
   assert.deepEqual(dashboard.structuredContent.allowedSceneIds, ["wind-down"]);
 

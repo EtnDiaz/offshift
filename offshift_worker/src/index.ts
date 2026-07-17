@@ -120,7 +120,7 @@ const MCP_TOOLS = [
   {
     name: "get_work_pattern_snapshot",
     title: "Get explainable work-pattern snapshot",
-    description: "Use this when the user asks why Offshift suggested a break or whether a local protection rule is eligible. It returns only explainable aggregate categories, never code or screen content.",
+    description: "Use this when the user asks why Offshift suggested a break or whether a local protection rule is eligible. It returns only explainable aggregate timing, never app categories, code, or screen content.",
     inputSchema: optionalUserInputSchema(),
     outputSchema: {
       type: "object",
@@ -496,7 +496,6 @@ function dashboardData(store: DemoStore, userId: string, plan: DashboardPlan) {
   const behavior = store.getBehaviorSnapshot(userId);
   return {
     snapshot: {
-      activeAppCategory: "coding",
       focusMinutes: focus.activeMinutes,
       thresholdMinutes: 50,
       suggestedBreakMinutes: 5,
@@ -823,9 +822,9 @@ function behaviorSnapshotSchema(): Record<string, unknown> {
 function dashboardSnapshotSchema(): Record<string, unknown> {
   return {
     type: "object",
-    required: ["activeAppCategory", "focusMinutes", "thresholdMinutes", "suggestedBreakMinutes", "privacyNote"],
+    additionalProperties: false,
+    required: ["focusMinutes", "thresholdMinutes", "suggestedBreakMinutes", "privacyNote"],
     properties: {
-      activeAppCategory: { const: "coding" },
       focusMinutes: { type: "integer", minimum: 1 },
       thresholdMinutes: { type: "integer", minimum: 1 },
       suggestedBreakMinutes: { type: "integer", minimum: 1 },
