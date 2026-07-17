@@ -214,6 +214,29 @@ public struct LocalInterventionGate: Equatable, Sendable {
     }
 }
 
+/// A local presentation guard for the optional Lock Screen rule. A host must
+/// begin a fresh Protect episode, then report that its own care surface is
+/// actually visible before it can ask the controller to start a countdown.
+/// This state is intentionally process-local: a Worker, MCP tool, or app
+/// restart cannot carry it into a new episode.
+public struct ProtectionSurfaceVisibilityGate: Equatable, Sendable {
+    public private(set) var isVisible = false
+
+    public init() {}
+
+    public mutating func beginProtectEpisode() {
+        isVisible = false
+    }
+
+    public mutating func markSurfaceVisible() {
+        isVisible = true
+    }
+
+    public mutating func endProtectEpisode() {
+        isVisible = false
+    }
+}
+
 public enum AssessmentReason: String, Codable, CaseIterable, Sendable {
     case noRecentActivity
     case belowDriftThreshold

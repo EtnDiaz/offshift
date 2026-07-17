@@ -165,6 +165,24 @@ final class LocalInterventionGateTests: XCTestCase {
     }
 }
 
+final class ProtectionSurfaceVisibilityGateTests: XCTestCase {
+    func testFreshProtectEpisodeRequiresTheLocalSurfaceToBecomeVisible() {
+        var gate = ProtectionSurfaceVisibilityGate()
+
+        gate.beginProtectEpisode()
+        XCTAssertFalse(gate.isVisible)
+
+        gate.markSurfaceVisible()
+        XCTAssertTrue(gate.isVisible)
+
+        gate.endProtectEpisode()
+        XCTAssertFalse(gate.isVisible)
+
+        gate.beginProtectEpisode()
+        XCTAssertFalse(gate.isVisible)
+    }
+}
+
 final class QuietHoursScheduleTests: XCTestCase {
     func testOvernightQuietHoursIncludeMidnightAndExcludeTheEndHour() {
         let schedule = QuietHoursSchedule(startHour: 23, endHour: 7)

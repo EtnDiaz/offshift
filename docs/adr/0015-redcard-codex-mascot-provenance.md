@@ -25,10 +25,11 @@ modified sprite must state that it was changed for Offshift.
 The app must not import Red Card's separately attributed whistle audio. The
 private prototype may use the product-owner-supplied six-frame sleeping-Codex
 adaptation, after deterministic removal of the chroma background and panel
-borders. The mascot is decorative; accessible text and local user controls
-remain the authoritative explanation and exit path. It does not observe the
-user, change behaviour policy, or add authority over a device, smart-home
-scene, or Codex session.
+borders, plus the product-owner-selected front-facing sleeping-Codex mark for
+Offshift branding after chroma-background removal. The mascot is decorative;
+accessible text and local user controls remain the authoritative explanation
+and exit path. It does not observe the user, change behaviour policy, or add
+authority over a device, smart-home scene, or Codex session.
 
 ## Consequences
 

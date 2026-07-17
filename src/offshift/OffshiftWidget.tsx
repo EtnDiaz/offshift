@@ -161,48 +161,25 @@ export default function OffshiftWidget() {
   }
 
   const isWorking = status === "working";
-  const riskCopy = data.behaviour.level === "protect" ? "Wind-down suggested" : data.behaviour.level === "drift" ? "A pause may help" : "Check-in";
+  const riskCopy = data.behaviour.level === "protect" ? "Time to wind down" : data.behaviour.level === "drift" ? "A pause may help" : "Check-in";
+  const resetTitle = data.behaviour.level === "protect"
+    ? "Take a short reset before you continue"
+    : `Prepare a ${formatMinutes(data.plan.durationMinutes)} reset`;
 
   return (
     <main className="offshift-widget" aria-labelledby="offshift-title" aria-busy={isWorking}>
-      <section className="offshift-widget__snapshot" aria-labelledby="offshift-title">
+      <section className="offshift-widget__decision" aria-labelledby="offshift-title">
         <div className="offshift-widget__heading-row">
           <div>
             <p className="offshift-widget__eyebrow">Offshift</p>
-            <h1 id="offshift-title">A small check-in</h1>
+            <h1 id="offshift-title">{resetTitle}</h1>
           </div>
           <Badge color={data.behaviour.level === "protect" ? "danger" : "secondary"}>{riskCopy}</Badge>
         </div>
-        <dl className="offshift-widget__metrics">
-          <div><dt>Active work</dt><dd>{formatMinutes(data.snapshot.focusMinutes)}</dd></div>
-          <div><dt>Break cadence</dt><dd>{formatMinutes(data.snapshot.thresholdMinutes)}</dd></div>
-        </dl>
-        <p className="offshift-widget__privacy">{data.snapshot.privacyNote}</p>
-      </section>
-
-      <section className="offshift-widget__pattern" aria-labelledby="work-pattern-title">
-        <div>
-          <p className="offshift-widget__eyebrow">Offshift companion</p>
-          <h2 id="work-pattern-title">{data.behaviour.level === "protect" ? "It looks like a good time to wind down" : "Here is what Offshift noticed"}</h2>
-          <ul className="offshift-widget__reasons">
-            {data.behaviour.reasons.map((reason) => <li key={reason}>{reason}</li>)}
-          </ul>
-          <p className="offshift-widget__availability">
-            {data.behaviour.shadowMode ? "Observation only — nothing will interrupt you." : "A local reminder is active."} {data.behaviour.lockScreenRule === "not-configured" ? "Lock Screen is not enabled on this Mac." : "Lock Screen stays under local control on this Mac."}
-          </p>
-        </div>
-      </section>
-
-      <section className="offshift-widget__plan" aria-labelledby="break-plan-title">
-        <div className="offshift-widget__plan-header">
-          <div>
-            <p className="offshift-widget__eyebrow">Suggested next step</p>
-            <h2 id="break-plan-title">{formatMinutes(data.plan.durationMinutes)} away from the screen</h2>
-          </div>
-          <Badge color="secondary">{data.plan.status}</Badge>
-        </div>
-        <p className="offshift-widget__focus-label">{timingCopy(data.plan)}</p>
-        <p className="offshift-widget__availability">Your optional lights scene always asks for confirmation in Offshift Companion. ChatGPT cannot run it or lock your device.</p>
+        <p className="offshift-widget__summary">
+          {data.behaviour.reasons[0]} · {formatMinutes(data.snapshot.focusMinutes)} of aggregate active time.
+        </p>
+        <p className="offshift-widget__timing">{timingCopy(data.plan)}</p>
         {data.plan.status === "on-call" ? (
           <div className="offshift-widget__actions">
             <Button color="primary" variant="solid" size="md" disabled={isWorking} onClick={() => void runAction("resume")}>
@@ -212,17 +189,24 @@ export default function OffshiftWidget() {
         ) : (
           <div className="offshift-widget__actions">
             <Button color="primary" variant="solid" size="md" disabled={isWorking} onClick={() => void runAction("schedule")}>
-              {isWorking ? "Updating…" : `Prepare a ${formatMinutes(data.plan.durationMinutes)} reset`}
+              {isWorking ? "Preparing…" : `Prepare a ${formatMinutes(data.plan.durationMinutes)} reset`}
             </Button>
             <Button color="secondary" variant="outline" size="md" disabled={isWorking} onClick={() => void runAction("snooze")}>
-              Snooze 5 min
-            </Button>
-            <Button color="secondary" variant="outline" size="md" disabled={isWorking} onClick={() => void runAction("onCall")}>
-              I’m on call for 60 min
+              Not now — 5 min
             </Button>
           </div>
         )}
         {message && <p ref={messageRef} tabIndex={-1} className={`offshift-widget__message offshift-widget__message--${status}`} role={status === "error" ? "alert" : "status"}>{message}</p>}
+        <details className="offshift-widget__why">
+          <summary>Why am I seeing this?</summary>
+          <ul className="offshift-widget__reasons">
+            {data.behaviour.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>
+          <p>{data.snapshot.privacyNote}</p>
+        </details>
+        <p className="offshift-widget__availability">
+          This only prepares your plan. Open Offshift Companion for any local reminder, scene, or Lock Screen choice.
+        </p>
       </section>
     </main>
   );

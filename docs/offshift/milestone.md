@@ -12,6 +12,7 @@
 4. Smart-home capability is exactly one locally mapped, direct-confirmation `wind-down` scene; it has no arbitrary URL, entity, service, token, or model-controlled command path.
 5. Unit, API, MCP contract, and companion state-machine tests pass; ChatGPT Developer Mode golden prompts have recorded evidence once an HTTPS endpoint is available.
 6. Five opt-in pilot sessions produce enough feedback to decide whether overlay and auto-lock remain enabled features.
+7. The local companion and Apps SDK widget pass the UX acceptance gate: each care state presents one named primary action, one reversible deferral, a concise explanation, and an unobtrusive route to local settings; the black care surface remains readable at wide-desktop scale and does not make a local Lock Screen action appear remote or automatic.
 
 ## Explicitly not required to close this milestone
 

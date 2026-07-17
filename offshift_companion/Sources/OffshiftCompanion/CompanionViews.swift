@@ -1,118 +1,5 @@
-import OffshiftCompanionCore
 import SwiftUI
-
-struct CompanionDashboardView: View {
-    @ObservedObject var store: CompanionStore
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top) {
-                RedCardCodexSleepMascotView(size: 68)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Offshift companion")
-                        .font(.title2.weight(.semibold))
-                    Text("Local, explainable work-pattern protection")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(store.stateLabel)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.quaternary, in: Capsule())
-            }
-
-            GroupBox("Next step") {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(store.isProtectState ? "A clearer pause is ready" : "A gentle check-in is ready")
-                            .font(.headline)
-                        Text("Open the full-screen care message when you want to step away. It never closes Codex or touches your work.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Open care screen") { openWindow(id: "protection") }
-                        .buttonStyle(.borderedProminent)
-                }
-            }
-
-            GroupBox("What Offshift noticed") {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(store.reasons, id: \.self) { reason in
-                        Text(reason.replacingOccurrences(of: "Activity", with: "activity"))
-                    }
-                    Text("Only aggregate local timing is used. No code, prompts, terminal output, or screen content is collected.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(store.samplingStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            GroupBox("Your control") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(store.localControlSummary)
-                    Picker("Offshift mode", selection: Binding(
-                        get: { store.careMode },
-                        set: { store.setCareMode($0) }
-                    )) {
-                        Text("Sleep care").tag(OffshiftCareMode.sleep)
-                        Text("Off").tag(OffshiftCareMode.off)
-                    }
-                    .pickerStyle(.segmented)
-                    Text(store.nightCareSettings.summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if !store.nightCareSettings.isEnabled {
-                        Button("Enable night care (11 PM–7 AM)") {
-                            store.nightCareSettings.setEnabled(true)
-                        }
-                    }
-                    Text("These controls work only on this Mac. ChatGPT cannot pause, resume, or turn Offshift off for you.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack {
-                        if store.isPaused {
-                            Button("Resume Offshift") { store.resumeOffshift() }
-                                .buttonStyle(.borderedProminent)
-                            Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
-                        } else if store.isOffshiftEnabled {
-                            Button(store.pauseActionLabel) { store.pauseUntilTomorrow() }
-                            Button("Turn Offshift off", role: .destructive) { store.disableOffshift() }
-                        } else {
-                            Button("Turn Offshift on") { store.resumeOffshift() }
-                                .buttonStyle(.borderedProminent)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            #if DEBUG
-            GroupBox("Developer fixtures") {
-                HStack {
-                    Button("Routine") { store.simulateRoutine() }
-                    Button("Drift") { store.simulateDrift() }
-                    Button("Protect") { store.simulateProtect() }
-                    Button("Gentle night nudge") { store.simulateGentleNightCareNudge() }
-                    Button("Late-session fixture") { store.simulateLateSessionRisk() }
-                }
-            }
-            #endif
-
-            Text("The companion samples only aggregate active/idle time locally. It never inspects code, prompts, terminal output, or screen content.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(24)
-        .onChange(of: store.protectionPresentationToken) { _, _ in
-            openWindow(id: "protection")
-        }
-    }
-}
+import OffshiftCompanionCore
 
 struct ProtectionWindowView: View {
     @ObservedObject var store: CompanionStore
@@ -123,70 +10,76 @@ struct ProtectionWindowView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                Spacer()
-                RedCardCodexSleepMascotView(size: 150)
-                Text(store.careHeadline)
-                    .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .accessibilityFocused($isCareMessageFocused)
-                Text(store.careMessage)
-                    .font(.title3)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .frame(maxWidth: 620)
-                Text("Nothing here closes Codex, your terminal, or your work.")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.9))
+            ScrollView {
+                VStack(spacing: 26) {
+                    OffshiftBrandMarkView(size: 270)
+                    Text(store.careHeadline)
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .accessibilityFocused($isCareMessageFocused)
+                    Text(store.careMessage)
+                        .font(.title2)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .frame(maxWidth: 760)
+                    Text("Nothing here closes Codex, your terminal, or your work.")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.9))
 
-                VStack(spacing: 10) {
-                    Text(store.careReason)
-                    Text(store.countdownText)
-                        .accessibilityLabel("Lock Screen status: \(store.countdownText)")
-                }
-                .font(.caption)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(maxWidth: 580)
-
-                VStack(spacing: 12) {
-                    Button("Start a 5-minute break and leave") { takeFiveAndDismiss() }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .keyboardShortcut(.defaultAction)
-                        .accessibilityHint("Closes this screen and starts a five-minute local break.")
-                    Button(store.pauseActionLabel) { pauseAndDismiss() }
-                        .buttonStyle(.bordered)
-                    Button("Turn Offshift off", role: .destructive) { turnOffAndDismiss() }
-                        .buttonStyle(.bordered)
-                    if store.isProtectState {
-                        HStack {
-                            Button("On call for 15 min") { grantOnCallAndDismiss() }
-                            Button("Cancel countdown") { store.cancelPreLockCountdown() }
-                            if store.canStartCountdown {
-                                Button("Start 10-second countdown") { store.startPreLockCountdown() }
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                    } else {
-                        Text("This is a gentle night nudge. It cannot start a Lock Screen countdown.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.78))
+                    VStack(spacing: 10) {
+                        Text("Why now")
+                            .font(.headline)
+                        Text(store.careReason)
+                        Text(store.countdownText)
+                            .accessibilityLabel("Lock Screen status: \(store.countdownText)")
                     }
-                }
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(maxWidth: 720)
 
-                if let onCallMessage = store.onCallMessage {
-                    Text(onCallMessage)
+                    VStack(spacing: 12) {
+                        Button("Start a 5-minute reset") { takeFiveAndDismiss() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .keyboardShortcut(.defaultAction)
+                            .accessibilityHint("Closes this local care surface and starts a five-minute reset. Your work stays open.")
+                        Button(store.pauseActionLabel) { pauseAndDismiss() }
+                            .buttonStyle(.bordered)
+                        if store.isProtectState {
+                            HStack {
+                                Button("On call for 15 min") { grantOnCallAndDismiss() }
+                                Button("Cancel countdown") { store.cancelPreLockCountdown() }
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            Text("This is a gentle night nudge. It cannot start a Lock Screen countdown.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.78))
+                        }
+                    }
+
+                    if let onCallMessage = store.onCallMessage {
+                        Text(onCallMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    Button("Turn Offshift off", role: .destructive) { turnOffAndDismiss() }
+                        .buttonStyle(.plain)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
-                Spacer()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 48)
             }
             .foregroundStyle(.white)
-            .padding(48)
+            .padding(.horizontal, 48)
         }
-        .background(InterventionWindowConfigurator())
+        .background(InterventionWindowConfigurator(onProtectionWindowReady: {
+            store.protectionSurfaceDidBecomeVisible()
+        }))
         .onAppear { isCareMessageFocused = true }
+        .onDisappear { store.protectionSurfaceDidDisappear() }
     }
 
     private func takeFiveAndDismiss() {
@@ -215,9 +108,8 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text("State: \(store.stateLabel)")
-        Button("Show dashboard") { openWindow(id: "dashboard") }
-        Button("Show protection") { openWindow(id: "protection") }
+        Text("Offshift is \(store.isOffshiftEnabled ? "on" : "off")")
+        Button("Show Today") { openWindow(id: "dashboard") }
         Divider()
         Button("Quit Offshift") { NSApplication.shared.terminate(nil) }
     }
@@ -229,16 +121,18 @@ struct CompanionSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Offshift control") {
-                Text(store.localControlSummary)
+            Section("Care on this Mac") {
+                Text("Choose when Offshift is allowed to care for you. These controls never affect Codex, your terminal, or your work.")
+                    .foregroundStyle(.secondary)
                 Picker("Offshift mode", selection: Binding(
                     get: { store.careMode },
                     set: { store.setCareMode($0) }
                 )) {
-                    Text("Sleep care").tag(OffshiftCareMode.sleep)
-                    Text("Off").tag(OffshiftCareMode.off)
+                    Text("Sleep care is on").tag(OffshiftCareMode.sleep)
+                    Text("Offshift is off").tag(OffshiftCareMode.off)
                 }
-                Text("A pause immediately cancels the local countdown and prevents scenes or Lock Screen actions until tomorrow. Turning Offshift off also stops local sampling.")
+                Text(store.localControlSummary)
+                Text("A pause immediately cancels a local countdown and prevents scenes or Lock Screen actions until tomorrow. Turning Offshift off also stops local sampling.")
                     .foregroundStyle(.secondary)
                 if store.isPaused {
                     HStack {
@@ -254,9 +148,9 @@ struct CompanionSettingsView: View {
                     Button("Turn Offshift on") { store.resumeOffshift() }
                 }
             }
-            Section("Protection") {
-                Text("A local rule can use the macOS Lock Screen shortcut only after explicit confirmation.")
-                Text("Rule: when the local policy remains Protect, show a black full-screen intervention, then start one visible 10-second countdown. Cancel and a bounded 15-minute on-call override remain available.")
+            Section("Optional Lock Screen rule") {
+                Text("A local rule can use the macOS Lock Screen shortcut only after your explicit confirmation.")
+                Text("When the local policy remains Protect, Offshift first shows the black care screen. Only after it is visible can a single 10-second countdown begin. Cancel and a bounded 15-minute on-call override remain available.")
                     .foregroundStyle(.secondary)
                 if store.lockRuleEnabled {
                     Text("Enabled only on this Mac.")
@@ -272,7 +166,7 @@ struct CompanionSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Night care") {
+            Section("Night context") {
                 Toggle("Enable nightly care", isOn: Binding(
                     get: { store.nightCareSettings.isEnabled },
                     set: { store.nightCareSettings.setEnabled($0) }
@@ -303,11 +197,8 @@ struct CompanionSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Current state") {
-                Text(store.stateLabel)
-            }
             Section("Home Assistant wind-down") {
-                Text("Configure this only on your Mac. Offshift invokes exactly one mapped scene: scene.offshift_wind_down.")
+                Text("Optional. Configure this only on your Mac. Offshift can invoke one mapped scene: scene.offshift_wind_down.")
                     .foregroundStyle(.secondary)
                 TextField("Base URL", text: Binding(
                     get: { store.homeAssistantSettings.endpointText },
@@ -344,6 +235,6 @@ struct CompanionSettingsView: View {
             Text("Only when the local companion remains in Protect, Offshift will show a black full-screen intervention, then one visible 10-second countdown and post macOS's Lock Screen shortcut. You can cancel the countdown or use one 15-minute on-call override. ChatGPT and the Worker cannot trigger this rule.")
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 600)
     }
 }

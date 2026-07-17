@@ -64,9 +64,18 @@ The user must see the contributing categories, change thresholds, pause until to
 4. **ChatGPT Developer Mode tests** — use an HTTPS endpoint, execute direct/indirect/negative golden prompts, record selected tools and arguments, and check small layouts. ChatGPT Apps require an HTTPS MCP endpoint; rebuild, restart, and refresh the app metadata while iterating. [OpenAI Apps SDK deployment guide](https://developers.openai.com/apps-sdk/deploy) and [testing guide](https://developers.openai.com/apps-sdk/deploy/testing).
 5. **Companion manual tests** — permission denial, quiet-hours boundary, idle/resume, repeat-snooze and early-start explanations, instant disable, reboot, no network, pre-lock cancel, one-lock-per-night, and restoration after the system Lock Screen. Camera work, if ever piloted, adds a local-only/no-frame-retention audit rather than a fatigue test.
 6. **Pilot evidence** — five opt-in developers, short interviews after several sessions, and only aggregate local event logs. Review false positives before enabling overlays.
+7. **UX acceptance gate** — capture the macOS Today and protective-screen flows plus the Apps SDK widget at their target sizes. Verify a user can identify what Offshift noticed, the one immediate action, the bounded deferral, and where local-only settings live without encountering developer fixtures or technical policy tokens. Record keyboard focus, text scaling, and no-surprise Lock Screen boundaries.
 
 ## Immediate next work
 
-The next implementation milestone is **Real App loop**: run the golden-prompt suite in ChatGPT Developer Mode against the public HTTPS Worker. The endpoint, Developer Mode setting, and external MCP contract are verified; the remaining dependency is ChatGPT connector provisioning. Its direct New Plugin form accepts Offshift metadata and `No Auth`, but returns a generic “Error creating connector” toast even after a verified MCP version-negotiation fix. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
+The immediate implementation checkpoint is **Care-loop UX**: turn the local
+companion into a focused Today surface, keep durable controls in the native
+Settings scene, enlarge the local black care surface around the sleeping Codex
+brand mark, and simplify the Apps SDK widget to one prepared reset plus a
+clear local-only handoff. This is an MVP quality gate, not a new product
+authority: it must preserve all consent, privacy, local Lock Screen, and
+allowlisted-scene boundaries above.
+
+The next external dependency is still **Real App loop**: run the golden-prompt suite in ChatGPT Developer Mode against the public HTTPS Worker. The endpoint, Developer Mode setting, and external MCP contract are verified; the remaining dependency is ChatGPT connector provisioning. Its direct New Plugin form accepts Offshift metadata and `No Auth`, but returns a generic “Error creating connector” toast even after a verified MCP version-negotiation fix. The macOS collector, local lock boundary, and one allowlisted Home Assistant action are now built; they need pilot evidence, not broader authority.
 
 The follow-on work is **shadow mode**, not an aggressive blocker: collect only the approved coarse signals, show the participant what would have been suggested, then decide whether a visible nudge is deserved. The auto-lock option comes only after that evidence, and always remains a local, named, cancellable rule.

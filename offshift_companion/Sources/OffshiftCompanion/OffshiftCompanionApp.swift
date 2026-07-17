@@ -9,9 +9,20 @@ struct OffshiftCompanionApp: App {
     var body: some Scene {
         WindowGroup("Offshift", id: "dashboard") {
             CompanionDashboardView(store: store)
-                .frame(minWidth: 520, minHeight: 360)
+                .frame(minWidth: 680, minHeight: 560)
         }
-        .defaultSize(width: 620, height: 460)
+        .defaultSize(width: 820, height: 680)
+        .commands {
+            #if DEBUG
+            CommandMenu("Developer") {
+                Button("Routine fixture") { store.simulateRoutine() }
+                Button("Drift fixture") { store.simulateDrift() }
+                Button("Protect fixture") { store.simulateProtect() }
+                Button("Gentle night fixture") { store.simulateGentleNightCareNudge() }
+                Button("Late-session fixture") { store.simulateLateSessionRisk() }
+            }
+            #endif
+        }
 
         WindowGroup("Offshift protection", id: "protection") {
             ProtectionWindowView(store: store)

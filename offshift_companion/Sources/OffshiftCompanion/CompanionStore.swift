@@ -19,6 +19,7 @@ final class CompanionStore: ObservableObject {
     @Published private(set) var localControl = LocalInterventionGate()
     @Published private(set) var protectionPresentationToken = 0
     @Published private(set) var careMode: OffshiftCareMode
+    @Published private(set) var isProtectionSurfaceVisible = false
 
     private let shadowLog = InMemoryShadowModeLog()
     private let disabledLockAdapter = NeverLockingTestAdapter()
@@ -29,6 +30,7 @@ final class CompanionStore: ObservableObject {
     private let defaults: UserDefaults
     private var countdownTimer: Timer?
     private var overrideExpiryTimer: Timer?
+    private var protectionSurfaceGate = ProtectionSurfaceVisibilityGate()
     private var hasStartedCountdownForProtectEpisode = false
     private var hasPresentedNightCareDriftPrompt = false
     private let nightCarePresentationPolicy = NightCarePresentationPolicy()
@@ -72,7 +74,7 @@ final class CompanionStore: ObservableObject {
 
     var stateLabel: String { assessment.state.rawValue.capitalized }
     var careModeLabel: String { careMode == .sleep ? "Sleep care" : "Off" }
-    var reasons: [String] { assessment.reasons.map(\.rawValue) }
+    var reasons: [String] { assessment.reasons.map(AssessmentReasonCopy.userFacing) }
     var lockRuleEnabled: Bool { lockScreenSettings.isEnabled }
     var isProtectState: Bool { assessment.state == .protect }
     /// The assessment may be a developer fixture, so presentation copy follows
@@ -104,6 +106,42 @@ final class CompanionStore: ObservableObject {
               nightCareSettings.isInsideQuietHours()
         else { return "Pause until tomorrow" }
         return "Pause until \(NightCareSettings.hourLabel(nightCareSettings.schedule.endHour))"
+    }
+
+    var todayHeadline: String {
+        guard isOffshiftEnabled else { return "Offshift is off for now" }
+        if isPaused { return "Your reminders are paused" }
+        switch assessment.state {
+        case .routine:
+            return "Your next reset is ready when you are"
+        case .drift:
+            return "A five-minute reset may help"
+        case .protect:
+            return careIsDuringQuietHours ? "It can end here for tonight" : "Step away from the loop"
+        }
+    }
+
+    var todayMessage: String {
+        guard isOffshiftEnabled else {
+            return "Local sampling and care surfaces are stopped on this Mac."
+        }
+        if isPaused {
+            return localControlSummary
+        }
+        switch assessment.state {
+        case .routine:
+            return "You can take a reset whenever it helps. Offshift only uses aggregate local timing."
+        case .drift:
+            return "You have been in a sustained work session. Your work will stay open while you step away."
+        case .protect:
+            return careMessage
+        }
+    }
+
+    var todayPrimaryActionTitle: String {
+        if !isOffshiftEnabled { return "Turn Offshift on" }
+        if isPaused { return "Resume Offshift" }
+        return "Start a 5-minute reset"
     }
 
     var careHeadline: String {
@@ -186,6 +224,35 @@ final class CompanionStore: ObservableObject {
     func takeFive() {
         sampler.resetActivityWindow()
         countdownText = "Take five. Offshift will check local aggregate activity again when you return."
+    }
+
+    func pauseNoticesForFifteenMinutes() {
+        let now = Date.now
+        let until = now.addingTimeInterval(15 * 60)
+        guard localControl.pause(until: until, at: now) else { return }
+        persistLocalControl()
+        suppressLocalInterventions(message: "Offshift notices are paused until \(until.formatted(date: .omitted, time: .shortened)).")
+    }
+
+    /// Called only by the local borderless protection window after it has become
+    /// key. See ADR 0016: this is intentionally not reachable from any remote
+    /// integration or model-controlled path.
+    func protectionSurfaceDidBecomeVisible() {
+        guard assessment.state == .protect, localControl.permitsIntervention(at: .now) else { return }
+        protectionSurfaceGate.markSurfaceVisible()
+        isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
+        maybeStartAutomaticCountdown()
+    }
+
+    /// Closing or hiding the local care surface must fail closed: a countdown
+    /// cannot outlive the thing that explained it and exposed its cancel route.
+    func protectionSurfaceDidDisappear() {
+        protectionSurfaceGate.endProtectEpisode()
+        isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
+        guard controller.cancelPreLockCountdown(at: .now) else { return }
+        hasStartedCountdownForProtectEpisode = true
+        stopCountdownTimer()
+        countdownText = "Care screen closed. The local countdown was cancelled."
     }
 
     func startPreLockCountdown() {
@@ -351,6 +418,8 @@ final class CompanionStore: ObservableObject {
         _ = controller.apply(assessment, at: .now)
         if assessment.state != .protect {
             hasStartedCountdownForProtectEpisode = false
+            protectionSurfaceGate.endProtectEpisode()
+            isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
             stopCountdownTimer()
             stopOverrideExpiryTimer()
             countdownText = "No countdown running"
@@ -364,13 +433,15 @@ final class CompanionStore: ObservableObject {
         if shouldPresentCare {
             if assessment.state == .protect && !wasProtect {
                 hasStartedCountdownForProtectEpisode = false
-                maybeStartAutomaticCountdown()
+                protectionSurfaceGate.beginProtectEpisode()
+                isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
             }
             protectionPresentationToken &+= 1
             NSApp.activate(ignoringOtherApps: true)
         } else if assessment.state == .protect && !wasProtect {
             hasStartedCountdownForProtectEpisode = false
-            maybeStartAutomaticCountdown()
+            protectionSurfaceGate.beginProtectEpisode()
+            isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
         }
         onCallMessage = nil
     }
@@ -391,9 +462,7 @@ final class CompanionStore: ObservableObject {
             )
         )
         _ = controller.apply(assessment, at: .now)
-        if lockRuleEnabled {
-            maybeStartAutomaticCountdown()
-        } else {
+        if !lockRuleEnabled {
             countdownText = "Local Lock Screen rule disabled."
         }
         objectWillChange.send()
@@ -411,6 +480,8 @@ final class CompanionStore: ObservableObject {
             at: .now
         )
         hasStartedCountdownForProtectEpisode = true
+        protectionSurfaceGate.endProtectEpisode()
+        isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
         stopCountdownTimer()
         stopOverrideExpiryTimer()
         countdownText = "No countdown running"
@@ -457,7 +528,11 @@ final class CompanionStore: ObservableObject {
     }
 
     private func maybeStartAutomaticCountdown() {
-        guard assessment.state == .protect, lockRuleEnabled, !hasStartedCountdownForProtectEpisode else { return }
+        guard assessment.state == .protect,
+              protectionSurfaceGate.isVisible,
+              lockRuleEnabled,
+              !hasStartedCountdownForProtectEpisode
+        else { return }
         guard lockScreenSettings.confirmFreshLocalConsentBeforeCountdown() else {
             countdownText = "The local Lock Screen rule needs fresh local consent and Accessibility permission in Settings."
             return
@@ -532,6 +607,31 @@ final class CompanionStore: ObservableObject {
             countdownText = "The one-lock limit for this protect episode was reached."
         case .noCountdown:
             stopCountdownTimer()
+        }
+    }
+}
+
+private enum AssessmentReasonCopy {
+    static func userFacing(_ reason: AssessmentReason) -> String {
+        switch reason {
+        case .noRecentActivity:
+            return "No sustained local activity yet"
+        case .belowDriftThreshold:
+            return "You are below your reminder threshold"
+        case .sustainedContinuousActivity:
+            return "You have been active without a meaningful break"
+        case .sustainedActivityWithFrequentSwitching:
+            return "You have been active with frequent app switching"
+        case .protectContinuousActivity:
+            return "You have been active long enough for a stronger check-in"
+        case .protectActivityWithFrequentSwitching:
+            return "Long activity and frequent app switching reached your protection threshold"
+        case .insideQuietHours:
+            return "It is inside your configured quiet hours"
+        case .repeatedSnoozes:
+            return "You deferred recent reminders"
+        case .nextDayEarlyStartConfigured:
+            return "You marked an early start tomorrow"
         }
     }
 }

@@ -4,8 +4,10 @@ import SwiftUI
 /// SwiftUI owns the intervention content; this narrow AppKit bridge only gives
 /// its dedicated window the monitor-covering, black-surface behaviour.
 struct InterventionWindowConfigurator: NSViewRepresentable {
+    let onProtectionWindowReady: () -> Void
+
     func makeNSView(context: Context) -> InterventionWindowProbe {
-        InterventionWindowProbe()
+        InterventionWindowProbe(onProtectionWindowReady: onProtectionWindowReady)
     }
 
     func updateNSView(_ nsView: InterventionWindowProbe, context: Context) {
@@ -15,6 +17,16 @@ struct InterventionWindowConfigurator: NSViewRepresentable {
 
 final class InterventionWindowProbe: NSView {
     private weak var configuredWindow: NSWindow?
+    private let onProtectionWindowReady: () -> Void
+
+    init(onProtectionWindowReady: @escaping () -> Void) {
+        self.onProtectionWindowReady = onProtectionWindowReady
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -26,6 +38,7 @@ final class InterventionWindowProbe: NSView {
             guard let self, let window = self.window else { return }
             guard self.configuredWindow !== window else {
                 window.makeKeyAndOrderFront(nil)
+                self.onProtectionWindowReady()
                 return
             }
             self.configuredWindow = window
@@ -43,6 +56,7 @@ final class InterventionWindowProbe: NSView {
             }
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            self.onProtectionWindowReady()
         }
     }
 }
