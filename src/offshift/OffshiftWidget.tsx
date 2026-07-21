@@ -48,6 +48,13 @@ function timingCopy(plan: OffshiftWidgetData["plan"]): string {
   return "Nothing has been started yet.";
 }
 
+function demoPreviewMessage(action: ActionName): string {
+  if (action === "schedule") return "Demo preview prepared. No local reminder, device action, scene, or Lock Screen action runs from ChatGPT.";
+  if (action === "snooze") return "Demo preview snoozed for 5 minutes. No local action was run.";
+  if (action === "onCall") return "Demo preview shows a 60-minute on-call exception. No local action was run.";
+  return "Demo preview shows reminders resumed. No local action was run.";
+}
+
 export default function OffshiftWidget() {
   const [data, setData] = useState<OffshiftWidgetData | null>(null);
   const [status, setStatus] = useState<ActionStatus>("idle");
@@ -67,8 +74,6 @@ export default function OffshiftWidget() {
           widgetCapability.current = next.widgetCapability;
           setData(next.data);
           setConnectionIssue(null);
-        } else {
-          setConnectionIssue("Offshift needs a fresh dashboard session before it can safely update this plan.");
         }
       };
     },
@@ -135,8 +140,25 @@ export default function OffshiftWidget() {
               : "Reminders are back on.",
       );
     } catch {
-      setStatus("error");
-      setMessage("That update did not complete. Retry only if this dashboard session is still current; otherwise refresh Offshift.");
+      // The public Worker is a deliberately non-durable demo. A Cloudflare
+      // isolate can lose its short-lived capability between the render and a
+      // button click. Keep this fallback explicit and presentation-only: it
+      // never schedules a real plan or controls the local companion.
+      try {
+        const preview = await app.callServerTool({
+          name: OFFSHIFT_TOOLS.previewDashboardTransition,
+          arguments: { action, durationMinutes: data.plan.durationMinutes },
+        });
+        const previewData = dataFromToolResult(preview);
+        if (preview.isError || !previewData) throw new Error("Offshift could not prepare a demo preview.");
+        setData(previewData);
+        setStatus("success");
+        delete actionKeys.current[action];
+        setMessage(demoPreviewMessage(action));
+      } catch {
+        setStatus("error");
+        setMessage("That update did not complete. Refresh Offshift to start a fresh dashboard session.");
+      }
     }
   };
 

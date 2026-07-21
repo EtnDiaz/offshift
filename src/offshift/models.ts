@@ -3,6 +3,7 @@ export const OFFSHIFT_TOOLS = {
   snoozeBreak: "snooze_break",
   onCallOverride: "set_on_call_override",
   resumeReminders: "resume_reminders",
+  previewDashboardTransition: "preview_dashboard_transition",
 } as const;
 
 export const OFFSHIFT_WIDGET_CAPABILITY_META_KEY = "offshift/widgetCapability";

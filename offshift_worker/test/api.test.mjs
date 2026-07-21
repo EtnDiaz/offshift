@@ -66,7 +66,7 @@ test("health returns a stable service response", async () => {
     status: "ok",
     service: "offshift-demo-api",
     mcpPath: "/mcp",
-    widgetUri: "ui://widget/offshift-worker-v6.html",
+    widgetUri: "ui://widget/offshift-worker-v7.html",
     codexRelayPath: "/v1/codex/events",
   });
 });
@@ -265,6 +265,7 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
     "resume_reminders",
     "snooze_break",
     "set_on_call_override",
+    "preview_dashboard_transition",
     "render_offshift_dashboard",
   ]);
   const schedule = tools.find((tool) => tool.name === "schedule_break");
@@ -278,14 +279,22 @@ test("MCP exposes the decoupled tools with accurate safety annotations", async (
   assert.deepEqual(schedule._meta.ui.visibility, ["app"]);
   assert.deepEqual(schedule.inputSchema.required, ["idempotencyKey", "widgetCapability"]);
   assert.equal(schedule.inputSchema.properties.widgetCapability.minLength, 32);
-  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v6.html");
-  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v6.html");
+  assert.equal(render._meta.ui.resourceUri, "ui://widget/offshift-worker-v7.html");
+  assert.equal(render._meta["openai/outputTemplate"], "ui://widget/offshift-worker-v7.html");
+  const preview = tools.find((tool) => tool.name === "preview_dashboard_transition");
+  assert.deepEqual(preview.annotations, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: false,
+    idempotentHint: true,
+  });
+  assert.deepEqual(preview._meta.ui.visibility, ["app"]);
   assert.equal(tools.some((tool) => /webhook|lock|command/i.test(tool.name)), false);
 });
 
 test("MCP resource read returns the React widget with a tightly scoped CSP", async () => {
   const worker = app();
-  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v6.html" });
+  const { contents } = await mcp(worker, 3, "resources/read", { uri: "ui://widget/offshift-worker-v7.html" });
   assert.equal(contents.length, 1);
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.deepEqual(contents[0]._meta.ui.csp, {
@@ -293,13 +302,13 @@ test("MCP resource read returns the React widget with a tightly scoped CSP", asy
     resourceDomains: ["https://offshift-demo-api.tixo-digital.workers.dev"],
   });
   assert.match(contents[0].text, /offshift\.js/);
-  assert.match(contents[0].text, /rel="stylesheet" href="https:\/\/offshift-demo-api\.tixo-digital\.workers\.dev\/offshift\.css\?v=v6"/);
+  assert.match(contents[0].text, /rel="stylesheet" href="https:\/\/offshift-demo-api\.tixo-digital\.workers\.dev\/offshift\.css\?v=v7"/);
   assert.doesNotMatch(contents[0].text, /window\.openai/);
 });
 
 test("MCP resource read keeps prior widget URIs available for cached ChatGPT app descriptors", async () => {
   const worker = app();
-  for (const uri of ["ui://widget/offshift-worker-v4.html", "ui://widget/offshift-worker-v5.html"]) {
+  for (const uri of ["ui://widget/offshift-worker-v4.html", "ui://widget/offshift-worker-v5.html", "ui://widget/offshift-worker-v6.html"]) {
     const { contents } = await mcp(worker, 4, "resources/read", { uri });
     assert.equal(contents.length, 1);
     assert.equal(contents[0].uri, uri);
@@ -356,6 +365,24 @@ test("MCP mutations require a dashboard capability as well as an idempotency key
   });
   assert.equal(missingKey.code, -32602);
   assert.match(missingKey.message, /idempotencyKey is required/);
+});
+
+test("MCP dashboard preview fallback is app-only, deterministic, and has no mutation capability", async () => {
+  const worker = app();
+  const result = await mcp(worker, 10, "tools/call", {
+    name: "preview_dashboard_transition",
+    arguments: { action: "schedule", durationMinutes: 5 },
+  });
+  assert.equal(result.structuredContent.plan.id, "demo-preview");
+  assert.equal(result.structuredContent.plan.status, "scheduled");
+  assert.equal(result._meta, undefined);
+
+  const snoozed = await mcp(worker, 11, "tools/call", {
+    name: "preview_dashboard_transition",
+    arguments: { action: "snooze", durationMinutes: 5 },
+  });
+  assert.equal(snoozed.structuredContent.plan.status, "snoozed");
+  assert.equal(snoozed.structuredContent.plan.startsAt, "2026-07-16T10:05:00.000Z");
 });
 
 test("MCP dashboard capabilities are opaque, short-lived, and isolate mutation state", async () => {

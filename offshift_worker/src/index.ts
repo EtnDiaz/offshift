@@ -12,18 +12,19 @@ const MAX_BREAK_DURATION_MINUTES = 30;
 const MCP_PROTOCOL_VERSION = "2026-01-26";
 const MCP_SERVER_VERSION = "0.5.0";
 // Bump this whenever the document shell changes: ChatGPT may cache a ui:// resource.
-const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v6.html";
+const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v7.html";
 // A connected ChatGPT App can keep an older tool descriptor until its next
 // Developer Mode refresh. Keep this narrow compatibility read path so an
 // existing conversation using an earlier version gets the current safe widget rather than a
 // `resources/read` failure. It is deliberately not advertised in
-// `resources/list`; fresh clients receive only the versioned v6 URI above.
+// `resources/list`; fresh clients receive only the versioned v7 URI above.
 const LEGACY_WIDGET_URIS = new Set([
   "ui://widget/offshift-worker-v4.html",
   "ui://widget/offshift-worker-v5.html",
+  "ui://widget/offshift-worker-v6.html",
 ]);
 const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
-const WIDGET_ASSET_VERSION = "v6";
+const WIDGET_ASSET_VERSION = "v7";
 const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
 const WIDGET_CAPABILITY_TTL_MS = 5 * 60_000;
@@ -35,6 +36,7 @@ const CODEX_RELAY_PATH = "/v1/codex/events";
 
 const DATA_TOOL_META = { ui: { visibility: ["model"] } };
 const INTERACTIVE_TOOL_META = { ui: { visibility: ["app"] } };
+const INTERACTIVE_READ_TOOL_META = { ui: { visibility: ["app"] } };
 const MUTATION_ANNOTATIONS = {
   readOnlyHint: false,
   destructiveHint: false,
@@ -229,6 +231,23 @@ const MCP_TOOLS = [
     outputSchema: dashboardOutputSchema(),
     annotations: MUTATION_ANNOTATIONS,
     _meta: INTERACTIVE_TOOL_META,
+  },
+  {
+    name: "preview_dashboard_transition",
+    title: "Preview an Offshift dashboard transition",
+    description: "Use only from the Offshift widget when its short-lived demo session has expired. This renders a recording-safe demo state and never schedules a plan, controls a companion, runs a scene, locks a device, or invokes an external action.",
+    inputSchema: {
+      type: "object",
+      required: ["action"],
+      additionalProperties: false,
+      properties: {
+        action: { type: "string", enum: ["schedule", "snooze", "onCall", "resume"] },
+        durationMinutes: { type: "integer", minimum: MIN_BREAK_DURATION_MINUTES, maximum: MAX_BREAK_DURATION_MINUTES },
+      },
+    },
+    outputSchema: dashboardOutputSchema(),
+    annotations: READ_ANNOTATIONS,
+    _meta: INTERACTIVE_READ_TOOL_META,
   },
   {
     name: "render_offshift_dashboard",
@@ -486,6 +505,11 @@ function callMcpTool(
     session.state.idempotencyResults.set(key, plan);
     return dashboardToolResult(store, session.userId, plan, "Reminders are back on. No remote action was taken.", session.capability);
   }
+  if (params.name === "preview_dashboard_transition") {
+    const action = readDashboardPreviewAction(args.action);
+    const plan = previewDashboardTransition(action, readDuration(args.durationMinutes));
+    return dashboardToolResult(store, readUserId(args.userId), plan, "Demo preview only. No plan was scheduled and no local or remote action was taken.");
+  }
   if (params.name === "render_offshift_dashboard") {
     const session = mintDashboardSession(dashboardSessions, readUserId(args.userId), dependencies);
     return dashboardToolResult(store, session.userId, previewDashboardPlan(5, ALLOWED_SCENE_ID), "Showing the Offshift dashboard with its local-only safety boundary.", session.capability);
@@ -545,6 +569,14 @@ function dashboardPlan(status: DashboardPlan["status"], durationMinutes: number,
 function previewDashboardPlan(durationMinutes: number, sceneId: string): DashboardPlan {
   if (sceneId !== ALLOWED_SCENE_ID) throw new ApiError(400, "sceneId must be the allowlisted wind-down scene");
   return dashboardPlan("suggested", durationMinutes, DASHBOARD_NOW);
+}
+
+function previewDashboardTransition(action: "schedule" | "snooze" | "onCall" | "resume", durationMinutes: number): DashboardPlan {
+  const plan = previewDashboardPlan(durationMinutes, ALLOWED_SCENE_ID);
+  if (action === "schedule") return { ...plan, id: "demo-preview", status: "scheduled" };
+  if (action === "snooze") return dashboardPlan("snoozed", durationMinutes, new Date(DASHBOARD_NOW.getTime() + 5 * 60_000), "demo-preview");
+  if (action === "onCall") return dashboardPlan("on-call", durationMinutes, new Date(DASHBOARD_NOW.getTime() + 60 * 60_000), "demo-preview");
+  return { ...plan, id: "demo-preview" };
 }
 
 function scheduledDashboardPlan(state: DashboardState, durationMinutes: number, sceneId: string): DashboardPlan {
@@ -741,6 +773,11 @@ async function readJson(request: Request): Promise<Record<string, unknown>> {
 function readAction(value: unknown): BreakAction {
   if (typeof value === "string" && (BREAK_ACTIONS as readonly string[]).includes(value)) return value as BreakAction;
   throw new ApiError(400, `action must be one of: ${BREAK_ACTIONS.join(", ")}`);
+}
+
+function readDashboardPreviewAction(value: unknown): "schedule" | "snooze" | "onCall" | "resume" {
+  if (value === "schedule" || value === "snooze" || value === "onCall" || value === "resume") return value;
+  throw new ApiError(400, "action must be one of: schedule, snooze, onCall, resume");
 }
 
 function readUserId(value: unknown): string {
