@@ -149,6 +149,21 @@ final class LocalInterventionGateTests: XCTestCase {
         XCTAssertEqual(gate.availability, .active)
     }
 
+    func testReadOnlyPermissionCheckDoesNotMutateAnActiveGate() {
+        var gate = LocalInterventionGate()
+
+        XCTAssertTrue(gate.isInterventionPermitted(at: now))
+        XCTAssertEqual(gate.availability, .active)
+
+        let until = now.addingTimeInterval(60)
+        XCTAssertTrue(gate.pause(until: until, at: now))
+        XCTAssertFalse(gate.isInterventionPermitted(at: now))
+        XCTAssertTrue(gate.isInterventionPermitted(at: until))
+        // Rendering can recognise expiry, but only the imperative evaluation
+        // transitions and persists the paused state back to active.
+        XCTAssertEqual(gate.availability, .paused(until: until))
+    }
+
     func testDisableRequiresAnExplicitLocalEnable() {
         var gate = LocalInterventionGate()
         gate.disable()
@@ -172,7 +187,12 @@ final class ProtectionSurfaceVisibilityGateTests: XCTestCase {
         gate.beginProtectEpisode()
         XCTAssertFalse(gate.isVisible)
 
-        gate.markSurfaceVisible()
+        XCTAssertTrue(gate.markSurfaceVisible())
+        XCTAssertTrue(gate.isVisible)
+
+        // AppKit can report the already-visible window during a later layout
+        // pass. That acknowledgement must be inert.
+        XCTAssertFalse(gate.markSurfaceVisible())
         XCTAssertTrue(gate.isVisible)
 
         gate.endProtectEpisode()

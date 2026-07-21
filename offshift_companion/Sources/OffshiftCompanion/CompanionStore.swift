@@ -106,7 +106,10 @@ final class CompanionStore: ObservableObject {
     /// has already chosen a local pause. This value is the final gate before a
     /// delayed view callback can put that window back on screen.
     var shouldKeepProtectionSurfacePresented: Bool {
-        assessment.state == .protect && localControl.permitsIntervention(at: .now)
+        assessment.state == .protect && (
+            careScreenTriggerSource == .developerPreview ||
+            localControl.isInterventionPermitted(at: .now)
+        )
     }
     var isPaused: Bool {
         if case .paused = localControl.availability { return true }
@@ -307,8 +310,12 @@ final class CompanionStore: ObservableObject {
     /// key. See ADR 0016: this is intentionally not reachable from any remote
     /// integration or model-controlled path.
     func protectionSurfaceDidBecomeVisible() {
-        guard assessment.state == .protect, localControl.permitsIntervention(at: .now) else { return }
-        protectionSurfaceGate.markSurfaceVisible()
+        guard assessment.state == .protect else { return }
+        guard careScreenTriggerSource == .developerPreview || localControl.permitsIntervention(at: .now) else { return }
+        // AppKit can report the same window more than once while SwiftUI lays
+        // it out. Treat visibility as an edge, not a recurring event: the
+        // recurring publication used to create a layout/focus feedback loop.
+        guard protectionSurfaceGate.markSurfaceVisible() else { return }
         isProtectionSurfaceVisible = protectionSurfaceGate.isVisible
         OffshiftDiagnostics.record("care_surface_became_visible")
         maybeStartAutomaticCountdown()
@@ -554,6 +561,10 @@ final class CompanionStore: ObservableObject {
     }
 
     private func suppressLocalInterventions(message: String) {
+        // A debug preview is a one-shot visual route. Once the user takes a
+        // local pause or turns Offshift off, it must use the ordinary gate so
+        // a deferred AppKit callback cannot revive the preview window.
+        careScreenTriggerSource = .localBehaviour
         _ = controller.apply(
             WorkPatternAssessment(
                 state: .routine,

@@ -212,6 +212,22 @@ public struct LocalInterventionGate: Equatable, Sendable {
         }
         return availability == .active
     }
+
+    /// Read-only form for rendering and AppKit presentation checks. Calling a
+    /// mutating property through `@Published` during SwiftUI layout publishes a
+    /// write-back even when the value is unchanged, which can create a view
+    /// update loop. Imperative transitions should keep using
+    /// `permitsIntervention(at:)` so an elapsed pause is persisted as active.
+    public func isInterventionPermitted(at now: Date) -> Bool {
+        switch availability {
+        case .active:
+            return true
+        case .disabled:
+            return false
+        case let .paused(until):
+            return now >= until
+        }
+    }
 }
 
 /// A local presentation guard for the optional Lock Screen rule. A host must
@@ -228,8 +244,15 @@ public struct ProtectionSurfaceVisibilityGate: Equatable, Sendable {
         isVisible = false
     }
 
-    public mutating func markSurfaceVisible() {
+    /// Returns `true` only for the first visibility acknowledgement in the
+    /// current Protect episode. Hosts can receive repeated AppKit/SwiftUI
+    /// layout callbacks; those must not create new state publications or
+    /// countdown attempts.
+    @discardableResult
+    public mutating func markSurfaceVisible() -> Bool {
+        guard !isVisible else { return false }
         isVisible = true
+        return true
     }
 
     public mutating func endProtectEpisode() {

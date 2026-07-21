@@ -84,8 +84,8 @@ cat >"$INFO_PLIST" <<PLIST
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>$APP_DISPLAY_NAME</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1.2</string>
-<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleShortVersionString</key><string>0.1.3</string>
+<key>CFBundleVersion</key><string>4</string>
 <key>LSMinimumSystemVersion</key><string>$MIN_SYSTEM_VERSION</string>
 <key>LSUIElement</key><true/>
 <key>NSFocusStatusUsageDescription</key><string>Offshift reads only whether a Focus is active on this Mac to explain a local quiet-hours suggestion. It does not read the Focus name, calendar, notifications, or screen content.</string>

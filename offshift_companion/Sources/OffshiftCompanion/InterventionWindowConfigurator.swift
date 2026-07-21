@@ -25,6 +25,8 @@ struct InterventionWindowConfigurator: NSViewRepresentable {
 final class InterventionWindowProbe: NSView {
     private weak var configuredWindow: NSWindow?
     private var configuredMonitorCover: Bool?
+    private var isAppearanceApplicationScheduled = false
+    private var hasReportedWindowReady = false
     var requiresMonitorCover: Bool
     private let shouldKeepPresented: () -> Bool
     private let onProtectionWindowReady: () -> Void
@@ -50,15 +52,24 @@ final class InterventionWindowProbe: NSView {
     }
 
     func applyInterventionAppearance() {
+        // SwiftUI may call updateNSView repeatedly in one run-loop turn. Keep
+        // only one deferred AppKit operation outstanding instead of enqueueing
+        // an unbounded series of makeKey calls.
+        guard !isAppearanceApplicationScheduled else { return }
+        isAppearanceApplicationScheduled = true
         DispatchQueue.main.async { [weak self] in
-            guard let self, let window = self.window else { return }
+            guard let self else { return }
+            self.isAppearanceApplicationScheduled = false
+            guard let window = self.window else { return }
             // A user action may have paused or disabled Offshift between
             // SwiftUI scheduling this callback and AppKit applying it. Never
             // revive a care screen after that explicit local choice.
-            guard self.shouldKeepPresented() else { return }
+            guard self.shouldKeepPresented() else {
+                self.hasReportedWindowReady = false
+                return
+            }
             guard self.configuredWindow !== window || self.configuredMonitorCover != self.requiresMonitorCover else {
-                window.makeKeyAndOrderFront(nil)
-                self.onProtectionWindowReady()
+                self.reportWindowReadyIfNeeded()
                 return
             }
             self.configuredWindow = window
@@ -85,7 +96,13 @@ final class InterventionWindowProbe: NSView {
             }
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-            self.onProtectionWindowReady()
+            self.reportWindowReadyIfNeeded()
         }
+    }
+
+    private func reportWindowReadyIfNeeded() {
+        guard !hasReportedWindowReady else { return }
+        hasReportedWindowReady = true
+        onProtectionWindowReady()
     }
 }

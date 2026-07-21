@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # The asset catalog has no product version; keep the artifact name stable until
 # release metadata is introduced by a signed distribution workflow.
-VERSION="${OFFSHIFT_VERSION:-0.1.2}"
+VERSION="${OFFSHIFT_VERSION:-0.1.3}"
 RELEASE_DIR="$ROOT_DIR/release"
 STAGING_DIR="${TMPDIR:-/tmp}/OffshiftDmgStage"
 APP_BUNDLE="$STAGING_DIR/Offshift.app"
