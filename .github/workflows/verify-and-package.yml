@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -47,3 +48,38 @@ jobs:
           path: offshift_companion/release/Offshift-*.dmg
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [worker, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Offshift-dmg-${{ github.sha }}
+          path: release
+      - name: Publish DMG and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          sha256sum release/*.dmg > release/SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.dmg release/SHA256SUMS.txt --clobber
+          else
+            cat > release/RELEASE_NOTES.md <<'EOF'
+          ## Install Offshift
+
+          1. Download `Offshift-<version>.dmg` below.
+          2. Open it and drag **Offshift** to **Applications**.
+          3. Open Offshift from Applications. Its first run opens a short setup window; afterwards it lives in the menu bar.
+
+          This is an Apple-silicon developer preview for macOS 14 or later. It is ad-hoc signed for testing, not Developer ID notarized; macOS may require an explicit local approval before first launch. See the README for the reproducible source-build path and privacy boundary.
+          EOF
+            gh release create "$TAG" release/*.dmg release/SHA256SUMS.txt \
+              --title "Offshift $TAG" \
+              --notes-file release/RELEASE_NOTES.md
+          fi

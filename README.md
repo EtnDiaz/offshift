@@ -21,6 +21,26 @@ The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Clou
 3. Select `Prepare a 5-minute reset`, `Snooze 5 min`, or `I’m on call for 60 min`.
 4. The MCP tool returns the updated plan. It never starts a local notification, scene, or Lock Screen action. Those actions belong solely to the separately configured macOS companion.
 
+## Install the macOS companion (judge path)
+
+**Requirements:** macOS 14 or later; Apple silicon is the tested platform.
+
+1. Open the [latest GitHub Release](https://github.com/EtnDiaz/offshift/releases/latest) and download `Offshift-<version>.dmg`.
+2. Open the DMG and drag **Offshift** to the included **Applications** shortcut.
+3. Launch Offshift from Applications. The first launch opens a short consent-first setup; afterwards the moon icon lives in the menu bar, not the Dock.
+4. Choose **Show developer care preview** from the tray to inspect the care screen without triggering Lock Screen or smart-home actions.
+
+Releases include `SHA256SUMS.txt` for the DMG. The current developer preview is ad-hoc signed for testing and is **not** Developer ID notarized, so macOS may require an explicit local approval on first launch. A reproducible source-build path remains available:
+
+```bash
+git clone https://github.com/EtnDiaz/offshift.git
+cd offshift/offshift_companion
+swift test
+./script/build_and_run.sh --verify
+```
+
+The companion uses only local aggregate active/idle timing. It does not read code, terminal contents, screen content, or Screen Time; the bundled care preview cannot lock a Mac or control a home.
+
 ## Development
 
 Install the reference repository dependencies and build the widget:
