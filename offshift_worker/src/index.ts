@@ -12,14 +12,18 @@ const MAX_BREAK_DURATION_MINUTES = 30;
 const MCP_PROTOCOL_VERSION = "2026-01-26";
 const MCP_SERVER_VERSION = "0.5.0";
 // Bump this whenever the document shell changes: ChatGPT may cache a ui:// resource.
-const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v5.html";
+const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v6.html";
 // A connected ChatGPT App can keep an older tool descriptor until its next
 // Developer Mode refresh. Keep this narrow compatibility read path so an
-// existing conversation using v4 gets the current safe widget rather than a
+// existing conversation using an earlier version gets the current safe widget rather than a
 // `resources/read` failure. It is deliberately not advertised in
-// `resources/list`; fresh clients receive only the versioned v5 URI above.
-const LEGACY_WIDGET_URIS = new Set(["ui://widget/offshift-worker-v4.html"]);
+// `resources/list`; fresh clients receive only the versioned v6 URI above.
+const LEGACY_WIDGET_URIS = new Set([
+  "ui://widget/offshift-worker-v4.html",
+  "ui://widget/offshift-worker-v5.html",
+]);
 const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
+const WIDGET_ASSET_VERSION = "v6";
 const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
 const WIDGET_CAPABILITY_TTL_MS = 5 * 60_000;
@@ -111,7 +115,7 @@ interface WorkerDependencies {
 }
 
 function widgetHtml(assetOrigin: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="stylesheet" href="${assetOrigin}/offshift.css" /></head><body><div id="offshift-root"></div><script type="module" src="${assetOrigin}/offshift.js"></script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><link rel="stylesheet" href="${assetOrigin}/offshift.css?v=${WIDGET_ASSET_VERSION}" /></head><body><div id="offshift-root"></div><script type="module" src="${assetOrigin}/offshift.js?v=${WIDGET_ASSET_VERSION}"></script></body></html>`;
 }
 
 const MCP_TOOLS = [

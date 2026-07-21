@@ -142,7 +142,7 @@ export default function OffshiftWidget() {
 
   if (error || connectionIssue) {
     return (
-      <main className="offshift-widget offshift-widget--state offshift-widget--error" role="alert">
+      <main className="offshift-widget offshift-widget--state offshift-widget--error" data-theme="light" role="alert">
         <h1>Offshift needs a refresh</h1>
         <p>This dashboard session is missing or stale, so Offshift did not change your plan. No break, lock, scene, or Codex session was started or stopped.</p>
         <p className="offshift-widget__availability">Refreshing creates a new short-lived dashboard session. Your local companion settings stay exactly as they are.</p>
@@ -153,7 +153,7 @@ export default function OffshiftWidget() {
 
   if (!app || !data) {
     return (
-      <main className="offshift-widget offshift-widget--state" aria-live="polite">
+      <main className="offshift-widget offshift-widget--state" data-theme="light" aria-live="polite">
         <LoadingDots />
         <p>Loading your Offshift plan…</p>
       </main>
@@ -167,7 +167,7 @@ export default function OffshiftWidget() {
     : `Prepare a ${formatMinutes(data.plan.durationMinutes)} reset`;
 
   return (
-    <main className="offshift-widget" aria-labelledby="offshift-title" aria-busy={isWorking}>
+    <main className="offshift-widget" data-theme="light" aria-labelledby="offshift-title" aria-busy={isWorking}>
       <section className="offshift-widget__decision" aria-labelledby="offshift-title">
         <div className="offshift-widget__heading-row">
           <div>
