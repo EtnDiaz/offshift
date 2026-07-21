@@ -72,15 +72,15 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release/*.dmg release/SHA256SUMS.txt --clobber
           else
-            cat > release/RELEASE_NOTES.md <<'EOF'
-          ## Install Offshift
-
-          1. Download `Offshift-<version>.dmg` below.
-          2. Open it and drag **Offshift** to **Applications**.
-          3. Open Offshift from Applications. Its first run opens a short setup window; afterwards it lives in the menu bar.
-
-          This is an Apple-silicon developer preview for macOS 14 or later. It is ad-hoc signed for testing, not Developer ID notarized; macOS may require an explicit local approval before first launch. See the README for the reproducible source-build path and privacy boundary.
-          EOF
+            printf '%s\n' \
+              '## Install Offshift' \
+              '' \
+              '1. Download the DMG below.' \
+              '2. Open it and drag **Offshift** to **Applications**.' \
+              '3. Open Offshift from Applications. Its first run opens a short setup window; afterwards it lives in the menu bar.' \
+              '' \
+              'This is an Apple-silicon developer preview for macOS 14 or later. It is ad-hoc signed for testing, not Developer ID notarized; macOS may require an explicit local approval before first launch. See the README for the reproducible source-build path and privacy boundary.' \
+              > release/RELEASE_NOTES.md
             gh release create "$TAG" release/*.dmg release/SHA256SUMS.txt \
               --title "Offshift $TAG" \
               --notes-file release/RELEASE_NOTES.md
