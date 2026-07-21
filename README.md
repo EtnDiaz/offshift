@@ -4,6 +4,24 @@ Offshift is a ChatGPT App for developers who need an intentional way to leave a 
 
 The MVP is deliberately narrow. It contains a ChatGPT Apps SDK dashboard, a Cloudflare Worker-compatible demo API, and a local macOS companion. It does not inspect code or screen content, call arbitrary smart-home URLs, or implement Screen Time controls. The companion can run only one locally configured Home Assistant `wind-down` scene after direct local confirmation.
 
+## Built with Codex and GPT-5.6
+
+Offshift was built with Codex using GPT-5.6 as a collaborative engineering
+partner. It accelerated the implementation and iteration of:
+
+- the ChatGPT Apps SDK widget, MCP tool/resource contract, and Cloudflare
+  Worker demo host;
+- the Swift macOS companion, menu-bar flow, consent-first onboarding, care
+  screen, and DMG packaging;
+- focused test coverage, release CI, visual/UX critique, and recovery fixes;
+- the privacy and safety documentation that keeps code, screen content,
+  camera data, arbitrary webhooks, and remote lock authority out of scope.
+
+The product decisions remained human-owned: what Offshift may observe, when it
+may interrupt, what must remain local, and which capabilities it must refuse.
+For the Build Week submission, the primary Codex `/feedback` Session ID is
+recorded in the Devpost form alongside this repository.
+
 ## Repository shape
 
 - `src/offshift/` — React widget. Standard controls use `@openai/apps-sdk-ui` only.
