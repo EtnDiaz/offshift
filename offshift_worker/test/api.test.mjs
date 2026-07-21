@@ -297,6 +297,16 @@ test("MCP resource read returns the React widget with a tightly scoped CSP", asy
   assert.doesNotMatch(contents[0].text, /window\.openai/);
 });
 
+test("MCP resource read keeps the immediately preceding widget URI available for cached ChatGPT app descriptors", async () => {
+  const worker = app();
+  const { contents } = await mcp(worker, 4, "resources/read", { uri: "ui://widget/offshift-worker-v4.html" });
+
+  assert.equal(contents.length, 1);
+  assert.equal(contents[0].uri, "ui://widget/offshift-worker-v4.html");
+  assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
+  assert.match(contents[0].text, /offshift\.js/);
+});
+
 test("MCP work-pattern snapshot is explainable, shadow-only, and cannot trigger remote actions", async () => {
   const worker = app();
   const result = await mcp(worker, 4, "tools/call", {

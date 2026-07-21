@@ -13,6 +13,12 @@ const MCP_PROTOCOL_VERSION = "2026-01-26";
 const MCP_SERVER_VERSION = "0.5.0";
 // Bump this whenever the document shell changes: ChatGPT may cache a ui:// resource.
 const OFFSHIFT_WIDGET_URI = "ui://widget/offshift-worker-v5.html";
+// A connected ChatGPT App can keep an older tool descriptor until its next
+// Developer Mode refresh. Keep this narrow compatibility read path so an
+// existing conversation using v4 gets the current safe widget rather than a
+// `resources/read` failure. It is deliberately not advertised in
+// `resources/list`; fresh clients receive only the versioned v5 URI above.
+const LEGACY_WIDGET_URIS = new Set(["ui://widget/offshift-worker-v4.html"]);
 const WIDGET_ASSET_ORIGIN = "https://offshift-demo-api.tixo-digital.workers.dev";
 const ALLOWED_SCENE_ID = "wind-down";
 const DASHBOARD_NOW = new Date("2026-07-16T10:00:00.000Z");
@@ -400,10 +406,13 @@ function handleMcpMethod(
     };
   }
   if (method === "resources/read") {
-    if (params.uri !== OFFSHIFT_WIDGET_URI) throw new ApiError(404, "Offshift widget resource not found");
+    const requestedUri = typeof params.uri === "string" ? params.uri : "";
+    if (requestedUri !== OFFSHIFT_WIDGET_URI && !LEGACY_WIDGET_URIS.has(requestedUri)) {
+      throw new ApiError(404, "Offshift widget resource not found");
+    }
     return {
       contents: [{
-        uri: OFFSHIFT_WIDGET_URI,
+        uri: requestedUri,
         mimeType: "text/html;profile=mcp-app",
         text: widgetHtml(widgetAssetOrigin),
         _meta: {
